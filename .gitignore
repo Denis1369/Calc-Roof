@@ -1,0 +1,34 @@
+# Зависимости и сборка фронтенда (Vue/Vite)
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Логи пакетов
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Сборка бэкенда Tauri (Rust)
+src-tauri/target/
+
+# Локальная база данных SQLite
+estimates.db
+estimates.db-journal
+estimates.db-shm
+estimates.db-wal
+
+# Переменные окружения (если появятся)
+.env
+.env.*.local
+
+# Системные файлы macOS и Windows
+.DS_Store
+Thumbs.db
+
+# Настройки редакторов кода (VS Code, WebStorm и др.)
+.vscode/
+.idea/
+*.suo
+*.sln
