@@ -2,22 +2,12 @@
   <div class="eco-container">
     <header class="header">
       <h1>Управление справочниками</h1>
-      <p>База данных номенклатуры материалов и расценок на монтажные работы</p>
+      <p>База материалов и расценок на работы</p>
     </header>
 
     <div class="tabs">
-      <button 
-        :class="['tab-btn', { active: activeTab === 'materials' }]" 
-        @click="activeTab = 'materials'"
-      >
-        Справочник материалов
-      </button>
-      <button 
-        :class="['tab-btn', { active: activeTab === 'works' }]" 
-        @click="activeTab = 'works'"
-      >
-        Справочник видов работ
-      </button>
+      <button :class="{ active: activeTab === 'materials' }" @click="activeTab = 'materials'">Материалы</button>
+      <button :class="{ active: activeTab === 'works' }" @click="activeTab = 'works'">Работы (Сгруппированные)</button>
     </div>
 
     <div v-if="activeTab === 'materials'" class="tab-content">
@@ -26,27 +16,25 @@
         <form @submit.prevent="addMaterial" class="form-grid">
           <div class="input-group">
             <label>Артикул товара *</label>
-            <input v-model="newMaterial.артикул_товара" type="text" placeholder="Например: 082122" required />
+            <input v-model="newMaterial.артикул_товара" type="text" required />
           </div>
           <div class="input-group name-group">
             <label>Полное наименование материала *</label>
-            <input v-model="newMaterial.полное_наименование_материала" type="text" placeholder="ПВХ-мембрана LogicROOF..." required />
+            <input v-model="newMaterial.полное_наименование_материала" type="text" required />
           </div>
-          <div class="input-group short-input">
+          <div class="input-group">
             <label>Ед. изм. *</label>
             <select v-model="newMaterial.единица_измерения" required>
               <option value="м2">м²</option>
               <option value="м3">м³</option>
               <option value="шт">шт</option>
-              <option value="пог.м">пог. м</option>
-              <option value="кг">кг</option>
+              <option value="м/п">м/п</option>
               <option value="л">л</option>
-              <option value="рул.">рул.</option>
             </select>
           </div>
-          <div class="input-group short-input">
+          <div class="input-group">
             <label>Базовая цена (₽)</label>
-            <input v-model.number="newMaterial.базовая_цена" type="number" step="0.01" min="0" required />
+            <input v-model.number="newMaterial.базовая_цена" type="number" step="0.01" />
           </div>
           <div class="button-group">
             <button type="submit" class="btn-success">+ Добавить</button>
@@ -55,274 +43,390 @@
       </section>
 
       <section class="result-card">
-        <table class="modern-table">
-          <thead>
-            <tr>
-              <th class="col-id">ID</th>
-              <th class="col-article">Артикул товара</th>
-              <th class="col-name">Наименование материала</th>
-              <th class="col-unit">Ед. изм.</th>
-              <th class="col-price">Цена (₽)</th>
-              <th class="col-action">Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="materials.length === 0">
-              <td colspan="6" class="empty-state">Справочник материалов пока пуст.</td>
-            </tr>
-            <tr v-for="mat in materials" :key="mat.идентификатор">
-              <td class="col-id">{{ mat.идентификатор }}</td>
-              <td class="col-article">{{ mat.артикул_товара }}</td>
-              <td>{{ mat.полное_наименование_материала }}</td>
-              <td class="center">{{ mat.единица_измерения }}</td>
-              <td class="right bold">{{ mat.базовая_цена.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }}</td>
-              <td class="center">
-                <button @click="deleteMaterial(mat.идентификатор)" class="btn-danger">Удалить</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="modern-table wide-table">
+            <thead>
+              <tr>
+                <th style="width: 5%;">ID</th>
+                <th style="width: 15%;">Артикул</th>
+                <th style="width: 50%;">Наименование материала</th>
+                <th style="width: 10%;">Ед. изм.</th>
+                <th style="width: 15%;">Цена (₽)</th>
+                <th style="width: 5%;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="mat in materials" :key="mat.идентификатор">
+                <td class="center">{{ mat.идентификатор }}</td>
+                <td><input v-model="mat.артикул_товара" @change="updateMaterial(mat)" class="cell-input article" /></td>
+                <td><input v-model="mat.полное_наименование_материала" @change="updateMaterial(mat)" class="cell-input text-left" /></td>
+                <td class="center"><input v-model="mat.единица_измерения" @change="updateMaterial(mat)" class="cell-input center" /></td>
+                <td><input type="number" v-model.number="mat.базовая_цена" @change="updateMaterial(mat)" class="cell-input right bold" step="0.01" /></td>
+                <td class="center"><button @click="deleteMaterial(mat.идентификатор)" class="btn-danger" title="Удалить">🗑️</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
 
     <div v-if="activeTab === 'works'" class="tab-content">
       <section class="controls-card form-section work-theme">
         <h3>Добавить новую расценку на работы</h3>
-        <form @submit.prevent="addWork" class="form-grid work-grid">
-          <div class="input-group name-group">
-            <label>Наименование монтажной работы *</label>
-            <input v-model="newWork.наименование_работы" type="text" placeholder="Устройство пароизоляции..." required />
+        <form @submit.prevent="addWork" class="form-vertical">
+          <div class="row-basic">
+            <div class="input-group">
+              <label>Категория раздела *</label>
+              <input v-model="newWork.категория_работы" type="text" list="category-list" placeholder="Демонтаж, Основание..." required />
+              <datalist id="category-list">
+                <option v-for="cat in uniqueCategories" :key="cat" :value="cat"></option>
+              </datalist>
+            </div>
+            <div class="input-group name-group">
+              <label>Наименование работы *</label>
+              <input v-model="newWork.наименование_работы" type="text" placeholder="Например: Монтаж мембраны..." required />
+            </div>
+            <div class="input-group short-input">
+              <label>Ед. изм. *</label>
+              <select v-model="newWork.единица_измерения_работы" required>
+                <option value="м2">м²</option>
+                <option value="м/п">м/п</option>
+                <option value="шт">шт</option>
+                <option value="ед">ед</option>
+                <option value="компл">компл</option>
+                <option value="рейс">рейс</option>
+                <option value="смена">смена</option>
+              </select>
+            </div>
           </div>
-          <div class="input-group short-input">
-            <label>Ед. изм. *</label>
-            <select v-model="newWork.единица_измерения_работы" required>
-              <option value="м2">м²</option>
-              <option value="м/п">м/п</option>
-              <option value="шт">шт</option>
-              <option value="ед">ед</option>
-            </select>
+
+          <label class="section-label">Цены в зависимости от объема (₽):</label>
+          <div class="prices-grid">
+            <div class="price-input"><label>0 - 300</label><input v-model.number="newWork.цена_0_300" type="number" step="0.01" /></div>
+            <div class="price-input"><label>300 - 600</label><input v-model.number="newWork.цена_300_600" type="number" step="0.01" /></div>
+            <div class="price-input"><label>600 - 1000</label><input v-model.number="newWork.цена_600_1000" type="number" step="0.01" /></div>
+            <div class="price-input"><label>1000 - 3000</label><input v-model.number="newWork.цена_1000_3000" type="number" step="0.01" /></div>
+            <div class="price-input"><label>3000 - 6000</label><input v-model.number="newWork.цена_3000_6000" type="number" step="0.01" /></div>
+            <div class="price-input"><label>6000 - 15000</label><input v-model.number="newWork.цена_6000_15000" type="number" step="0.01" /></div>
+            <div class="price-input"><label>15000 - 30000</label><input v-model.number="newWork.цена_15000_30000" type="number" step="0.01" /></div>
+            <div class="price-input"><label>> 30000</label><input v-model.number="newWork.цена_более_30000" type="number" step="0.01" /></div>
           </div>
-          <div class="input-group short-input">
-            <label>Стоимость (₽)</label>
-            <input v-model.number="newWork.базовая_стоимость_работы" type="number" step="0.01" min="0" required />
-          </div>
-          <div class="button-group">
-            <button type="submit" class="btn-primary">+ Добавить</button>
+
+          <div class="button-row">
+            <button type="submit" class="btn-primary">+ Добавить работу</button>
           </div>
         </form>
       </section>
 
       <section class="result-card">
-        <table class="modern-table">
-          <thead>
-            <tr>
-              <th class="col-id">ID</th>
-              <th class="col-name">Наименование работы</th>
-              <th class="col-unit">Ед. изм.</th>
-              <th class="col-price">Цена за ед. (₽)</th>
-              <th class="col-action">Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="works.length === 0">
-              <td colspan="5" class="empty-state">Справочник работ пока пуст.</td>
-            </tr>
-            <tr v-for="work in works" :key="work.идентификатор">
-              <td class="col-id">{{ work.идентификатор }}</td>
-              <td>{{ work.наименование_работы }}</td>
-              <td class="center">{{ work.единица_измерения_работы }}</td>
-              <td class="right bold">{{ work.базовая_стоимость_работы.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }}</td>
-              <td class="center">
-                <button @click="deleteWork(work.идентификатор)" class="btn-danger">Удалить</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="modern-table wide-table">
+            <thead>
+              <tr>
+                <th style="width: 25%;">Наименование работы</th>
+                <th style="width: 5%;">Ед.</th>
+                <th style="width: 8%;">0-300</th>
+                <th style="width: 8%;">300-600</th>
+                <th style="width: 8%;">600-1k</th>
+                <th style="width: 8%;">1k-3k</th>
+                <th style="width: 8%;">3k-6k</th>
+                <th style="width: 8%;">6k-15k</th>
+                <th style="width: 8%;">15k-30k</th>
+                <th style="width: 8%;">>30k</th>
+                <th style="width: 4%;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="(group, category) in groupedWorks" :key="category">
+                
+                <tr class="group-header" @click="toggleGroup(category)" title="Нажмите, чтобы свернуть/развернуть">
+                  <td colspan="11">
+                    <span class="toggle-icon">{{ collapsedGroups[category] ? '▶' : '▼' }}</span>
+                    {{ category }}
+                    <span class="group-count">({{ group.length }} позиций)</span>
+                  </td>
+                </tr>
+                
+                <tr v-for="work in group" :key="work.идентификатор" v-show="!collapsedGroups[category]">
+                  <td><input v-model="work.наименование_работы" @change="updateWork(work)" class="cell-input text-left work-name" /></td>
+                  <td class="center"><input v-model="work.единица_измерения_работы" @change="updateWork(work)" class="cell-input center" /></td>
+                  <td><input type="number" v-model.number="work.цена_0_300" @change="updateWork(work)" class="cell-input right" step="0.01" /></td>
+                  <td><input type="number" v-model.number="work.цена_300_600" @change="updateWork(work)" class="cell-input right" step="0.01" /></td>
+                  <td><input type="number" v-model.number="work.цена_600_1000" @change="updateWork(work)" class="cell-input right" step="0.01" /></td>
+                  <td><input type="number" v-model.number="work.цена_1000_3000" @change="updateWork(work)" class="cell-input right" step="0.01" /></td>
+                  <td><input type="number" v-model.number="work.цена_3000_6000" @change="updateWork(work)" class="cell-input right" step="0.01" /></td>
+                  <td><input type="number" v-model.number="work.цена_6000_15000" @change="updateWork(work)" class="cell-input right" step="0.01" /></td>
+                  <td><input type="number" v-model.number="work.цена_15000_30000" @change="updateWork(work)" class="cell-input right" step="0.01" /></td>
+                  <td><input type="number" v-model.number="work.цена_более_30000" @change="updateWork(work)" class="cell-input right" step="0.01" /></td>
+                  <td class="center">
+                    <button @click="deleteWork(work.идентификатор)" class="btn-danger" title="Удалить">🗑️</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
-
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { getDb } from '../database.js';
 
-
-const activeTab = ref('materials'); 
-
-
+const activeTab = ref('works');
 const materials = ref([]);
 const works = ref([]);
 
 
-const newMaterial = ref({
-  артикул_товара: '',
-  полное_наименование_материала: '',
-  единица_измерения: 'м2',
-  базовая_цена: 0
-});
+const collapsedGroups = ref({});
 
+const newMaterial = ref({ артикул_товара: '', полное_наименование_материала: '', единица_измерения: 'м2', базовая_цена: 0 });
 
 const newWork = ref({
-  наименование_работы: '',
-  единица_измерения_работы: 'м2',
-  базовая_стоимость_работы: 0
+  категория_работы: '', наименование_работы: '', единица_измерения_работы: 'м2',
+  цена_0_300: 0, цена_300_600: 0, цена_600_1000: 0, цена_1000_3000: 0,
+  цена_3000_6000: 0, цена_6000_15000: 0, цена_15000_30000: 0, цена_более_30000: 0
 });
 
 
+const groupedWorks = computed(() => {
+  const groups = {};
+  works.value.forEach(work => {
+    const cat = work.категория_работы || 'Общие работы';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(work);
+  });
+  return groups;
+});
 
 
-async function loadMaterials() {
-  try {
-    const db = await getDb();
-    materials.value = await db.select('SELECT * FROM Справочник_материалов ORDER BY идентификатор DESC');
-  } catch (error) {
-    console.error('Ошибка загрузки материалов:', error);
-  }
+const uniqueCategories = computed(() => Object.keys(groupedWorks.value));
+
+
+function toggleGroup(category) {
+  collapsedGroups.value[category] = !collapsedGroups.value[category];
 }
+
+async function loadData() {
+  const db = await getDb();
+  materials.value = await db.select('SELECT * FROM Справочник_материалов ORDER BY идентификатор DESC');
+  works.value = await db.select('SELECT * FROM Справочник_видов_работ ORDER BY идентификатор ASC');
+}
+
+
+
 
 async function addMaterial() {
   try {
     const db = await getDb();
     await db.execute(
-      `INSERT INTO Справочник_материалов (артикул_товара, полное_наименование_материала, единица_измерения, базовая_цена) 
-       VALUES ($1, $2, $3, $4)`,
-      [
-        newMaterial.value.артикул_товара,
-        newMaterial.value.полное_наименование_материала,
-        newMaterial.value.единица_измерения,
-        newMaterial.value.базовая_цена
-      ]
+      `INSERT INTO Справочник_материалов (артикул_товара, полное_наименование_материала, единица_измерения, базовая_цена) VALUES ($1, $2, $3, $4)`,
+      [newMaterial.value.артикул_товара, newMaterial.value.полное_наименование_материала, newMaterial.value.единица_измерения, newMaterial.value.базовая_цена || 0]
     );
-
-    
-    newMaterial.value.артикул_товара = '';
-    newMaterial.value.полное_наименование_материала = '';
-    newMaterial.value.базовая_цена = 0;
-
-    await loadMaterials();
-  } catch (error) {
-    console.error('Ошибка добавления материала:', error);
-    alert('Не удалось добавить материал. Возможно, такой артикул товара уже существует!');
-  }
-}
-
-async function deleteMaterial(id) {
-  if (!confirm('Удалить этот материал из базы?')) return;
-  try {
-    const db = await getDb();
-    await db.execute('DELETE FROM Справочник_материалов WHERE идентификатор = $1', [id]);
-    await loadMaterials();
-  } catch (error) {
-    console.error('Ошибка удаления материала:', error);
-    alert('Ошибка удаления. Возможно, материал используется в сохраненных пресетах систем.');
-  }
-}
-
-
-
-
-async function loadWorks() {
-  try {
-    const db = await getDb();
-    works.value = await db.select('SELECT * FROM Справочник_видов_работ ORDER BY идентификатор DESC');
-  } catch (error) {
-    console.error('Ошибка загрузки работ:', error);
-  }
+    newMaterial.value = { артикул_товара: '', полное_наименование_материала: '', единица_измерения: 'м2', базовая_цена: 0 };
+    await loadData();
+  } catch (e) { alert('Ошибка! Возможно такой артикул уже есть.'); }
 }
 
 async function addWork() {
   try {
     const db = await getDb();
     await db.execute(
-      `INSERT INTO Справочник_видов_работ (наименование_работы, единица_измерения_работы, базовая_стоимость_работы) 
-       VALUES ($1, $2, $3)`,
+      `INSERT INTO Справочник_видов_работ 
+      (категория_работы, наименование_работы, единица_измерения_работы, цена_0_300, цена_300_600, цена_600_1000, цена_1000_3000, цена_3000_6000, цена_6000_15000, цена_15000_30000, цена_более_30000) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
-        newWork.value.наименование_работы,
-        newWork.value.единица_измерения_работы,
-        newWork.value.базовая_стоимость_работы
+        newWork.value.категория_работы || 'Общие работы',
+        newWork.value.наименование_работы, newWork.value.единица_измерения_работы,
+        newWork.value.цена_0_300 || 0, newWork.value.цена_300_600 || 0,
+        newWork.value.цена_600_1000 || 0, newWork.value.цена_1000_3000 || 0,
+        newWork.value.цена_3000_6000 || 0, newWork.value.цена_6000_15000 || 0,
+        newWork.value.цена_15000_30000 || 0, newWork.value.цена_более_30000 || 0
       ]
     );
-
     
-    newWork.value.наименование_работы = '';
-    newWork.value.базовая_стоимость_работы = 0;
+    collapsedGroups.value[newWork.value.категория_работы] = false;
+    
+    newWork.value = {
+      категория_работы: '', наименование_работы: '', единица_измерения_работы: 'м2',
+      цена_0_300: 0, цена_300_600: 0, цена_600_1000: 0, цена_1000_3000: 0,
+      цена_3000_6000: 0, цена_6000_15000: 0, цена_15000_30000: 0, цена_более_30000: 0
+    };
+    await loadData();
+  } catch (error) { console.error(error); alert('Ошибка добавления работы'); }
+}
 
-    await loadWorks();
-  } catch (error) {
-    console.error('Ошибка добавления работы:', error);
+
+
+
+async function updateMaterial(mat) {
+  try {
+    const db = await getDb();
+    await db.execute(
+      `UPDATE Справочник_материалов SET 
+        артикул_товара = $1, полное_наименование_материала = $2, 
+        единица_измерения = $3, базовая_цена = $4 
+       WHERE идентификатор = $5`,
+      [mat.артикул_товара, mat.полное_наименование_материала, mat.единица_измерения, mat.базовая_цена, mat.идентификатор]
+    );
+  } catch (e) { console.error("Ошибка обновления материала", e); }
+}
+
+async function updateWork(work) {
+  try {
+    const db = await getDb();
+    await db.execute(
+      `UPDATE Справочник_видов_работ SET 
+        наименование_работы = $1, единица_измерения_работы = $2, 
+        цена_0_300 = $3, цена_300_600 = $4, цена_600_1000 = $5, 
+        цена_1000_3000 = $6, цена_3000_6000 = $7, цена_6000_15000 = $8, 
+        цена_15000_30000 = $9, цена_более_30000 = $10
+       WHERE идентификатор = $11`,
+      [
+        work.наименование_работы, work.единица_измерения_работы,
+        work.цена_0_300 || 0, work.цена_300_600 || 0, work.цена_600_1000 || 0,
+        work.цена_1000_3000 || 0, work.цена_3000_6000 || 0, work.цена_6000_15000 || 0,
+        work.цена_15000_30000 || 0, work.цена_более_30000 || 0,
+        work.идентификатор
+      ]
+    );
+  } catch (e) { console.error("Ошибка обновления расценки", e); }
+}
+
+
+
+
+async function deleteMaterial(id) {
+  if (confirm('Удалить материал?')) {
+    const db = await getDb(); await db.execute('DELETE FROM Справочник_материалов WHERE идентификатор = $1', [id]); await loadData();
   }
 }
 
 async function deleteWork(id) {
-  if (!confirm('Удалить эту расценку из базы?')) return;
-  try {
-    const db = await getDb();
-    await db.execute('DELETE FROM Справочник_видов_работ WHERE идентификатор = $1', [id]);
-    await loadWorks();
-  } catch (error) {
-    console.error('Ошибка удаления работы:', error);
+  if (confirm('Удалить расценку на работу?')) {
+    const db = await getDb(); await db.execute('DELETE FROM Справочник_видов_работ WHERE идентификатор = $1', [id]); await loadData();
   }
 }
 
-
-onMounted(() => {
-  loadMaterials();
-  loadWorks();
-});
+onMounted(() => loadData());
 </script>
 
 <style scoped>
-.eco-container { max-width: 1200px; margin: 0 auto; padding: 2rem; font-family: 'Arial', sans-serif; color: #2c3e50; }
-.header h1 { color: #1e3a8a; margin-bottom: 0.5rem; }
-.header p { color: #64748b; margin-bottom: 2rem; }
+
+.group-header {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.group-header:hover td {
+  background-color: #4b5563 !important; 
+}
+.group-header td {
+  background-color: #374151 !important; 
+  color: #ffffff; 
+  font-weight: bold;
+  font-size: 1.05rem;
+  padding: 0.8rem 1rem !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: none !important;
+  user-select: none;
+}
+.toggle-icon {
+  display: inline-block;
+  width: 20px;
+  font-size: 0.9rem;
+  color: #9ca3af;
+}
+.group-count {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  margin-left: 10px;
+  text-transform: none;
+}
 
 
-.tabs { display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 2px solid #e2e8f0; }
-.tab-btn { padding: 0.8rem 1.5rem; background: none; border: none; font-size: 1.1rem; font-weight: bold; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: 0.2s; }
-.tab-btn:hover { color: #1e3a8a; }
-.tab-btn.active { color: #1e3a8a; border-bottom-color: #1e3a8a; }
+.cell-input {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem;
+  border: 1px solid transparent;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: inherit;
+  transition: all 0.2s;
+}
+.cell-input:hover {
+  background-color: #f3f4f6;
+  border-radius: 4px;
+}
+.cell-input:focus {
+  background-color: #ffffff;
+  border: 1px solid #3b82f6;
+  outline: none;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.work-name {
+  font-weight: 600;
+  color: #1f2937;
+}
 
-.tab-content { animation: fadeIn 0.3s ease-in-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
+.eco-container { max-width: 1200px; margin: 0 auto; padding: 2rem; font-family: 'Inter', sans-serif; }
+.header h1 { color: #2e7d32; margin-bottom: 0.5rem; }
+.tabs { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.5rem; }
+.tabs button { background: none; border: none; font-size: 1.1rem; font-weight: 600; color: #757575; cursor: pointer; padding: 0.5rem 1rem; border-radius: 6px; transition: 0.2s; }
+.tabs button:hover { background: #f5f5f5; }
+.tabs button.active { color: #2e7d32; background: #e8f5e9; }
 
-.controls-card { background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 2rem; border-left: 5px solid #10b981; }
-.work-theme { border-left-color: #3b82f6; }
-.form-section h3 { margin-top: 0; margin-bottom: 1.5rem; color: #334155; }
+.controls-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 2rem; border-top: 4px solid #4caf50; }
+.work-theme { border-top-color: #1976d2; }
 
-.form-grid { display: grid; grid-template-columns: 1fr 2fr 100px 120px 120px; gap: 1rem; align-items: end; }
-.work-grid { grid-template-columns: 2fr 100px 150px 120px; }
+.form-grid { display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: 1rem; align-items: end; }
+.form-vertical { display: flex; flex-direction: column; gap: 1.5rem; }
+.row-basic { display: flex; gap: 1rem; align-items: end; }
+.name-group { flex: 3; }
+.short-input { flex: 1; }
+
+.section-label { font-weight: bold; font-size: 0.9rem; color: #555; margin-bottom: -1rem; display: block; }
+
+.prices-grid { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); 
+  gap: 0.8rem; 
+  background: #f8f9fa; 
+  padding: 1rem; 
+  border-radius: 8px; 
+  border: 1px solid #e0e0e0; 
+}
+.price-input { display: flex; flex-direction: column; gap: 0.3rem; }
+.price-input label { font-size: 0.8rem; font-weight: bold; color: #4b5563; text-align: center; white-space: nowrap; }
+.price-input input { padding: 0.5rem; border: 1px solid #ced4da; border-radius: 4px; text-align: center; font-size: 0.95rem; width: 100%; box-sizing: border-box; }
 
 .input-group { display: flex; flex-direction: column; gap: 0.4rem; }
-.input-group label { font-size: 0.85rem; font-weight: bold; color: #475569; }
-.input-group input, .input-group select { padding: 0.7rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.95rem; }
-.input-group input:focus, .input-group select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+.input-group label { font-size: 0.85rem; font-weight: 600; color: #555; }
+.input-group input, .input-group select { padding: 0.6rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem; }
 
 .button-group { display: flex; align-items: flex-end; }
-.btn-success { background: #10b981; color: white; border: none; padding: 0.75rem 1rem; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
-.btn-success:hover { background: #059669; }
-.btn-primary { background: #3b82f6; color: white; border: none; padding: 0.75rem 1rem; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
-.btn-primary:hover { background: #2563eb; }
-.btn-danger { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; transition: 0.2s; }
-.btn-danger:hover { background: #fca5a5; }
+.button-row { display: flex; justify-content: flex-end; }
+.btn-primary, .btn-success { color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+.btn-success { background: #2e7d32; } .btn-success:hover { background: #1b5e20; }
+.btn-primary { background: #1976d2; } .btn-primary:hover { background: #1565c0; }
+.btn-danger { background: none; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.6; } .btn-danger:hover { opacity: 1; color: red; }
 
-
-.result-card { background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+.result-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+.table-scroll { overflow-x: auto; }
 .modern-table { width: 100%; border-collapse: collapse; text-align: left; }
-.modern-table th { background-color: #f8fafc; color: #475569; padding: 1rem; font-size: 0.9rem; border-bottom: 2px solid #e2e8f0; }
-.modern-table td { padding: 1rem; border-bottom: 1px solid #e2e8f0; font-size: 0.95rem; }
-.modern-table tbody tr:hover { background-color: #f1f5f9; }
-
-.col-id { width: 60px; color: #94a3b8; font-size: 0.85rem; }
-.col-article { font-family: 'Courier New', Courier, monospace; font-weight: bold; color: #10b981; width: 150px; }
-.col-unit { width: 100px; text-align: center; }
-.col-price { width: 150px; text-align: right; }
-.col-action { width: 100px; text-align: center; }
-
+.wide-table { min-width: 1200px; }
+.modern-table th { background-color: #f4f6f8; color: #555; padding: 0.8rem; font-size: 0.85rem; text-align: center; border-bottom: 2px solid #ddd; white-space: nowrap; }
+.modern-table td { padding: 0; border-bottom: 1px solid #edf2f7; font-size: 0.9rem; } 
+.modern-table td > button { margin: 0.6rem; }
+.article { font-family: monospace; font-weight: bold; color: #2e7d32; }
 .center { text-align: center; }
 .right { text-align: right; }
 .bold { font-weight: bold; }
-.empty-state { text-align: center; color: #94a3b8; padding: 3rem !important; font-style: italic; }
 </style>

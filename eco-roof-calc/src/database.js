@@ -26,12 +26,21 @@ export async function initDatabase() {
     )
   `);
 
+
   await db.execute(`
     CREATE TABLE IF NOT EXISTS Справочник_видов_работ (
       идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
+      категория_работы TEXT DEFAULT 'Общие работы',
       наименование_работы TEXT,
       единица_измерения_работы TEXT,
-      базовая_стоимость_работы REAL DEFAULT 0
+      цена_0_300 REAL DEFAULT 0,
+      цена_300_600 REAL DEFAULT 0,
+      цена_600_1000 REAL DEFAULT 0,
+      цена_1000_3000 REAL DEFAULT 0,
+      цена_3000_6000 REAL DEFAULT 0,
+      цена_6000_15000 REAL DEFAULT 0,
+      цена_15000_30000 REAL DEFAULT 0,
+      цена_более_30000 REAL DEFAULT 0
     )
   `);
 

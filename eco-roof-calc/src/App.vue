@@ -1,16 +1,3 @@
-<script setup>
-import { onMounted } from 'vue';
-import { initDatabase } from './database.js';
-
-onMounted(async () => {
-  try {
-    await initDatabase();
-  } catch (error) {
-    console.error('Ошибка при создании базы данных:', error);
-  }
-});
-</script>
-
 <template>
   <div class="app-layout">
     <aside class="sidebar">
@@ -27,7 +14,23 @@ onMounted(async () => {
   </div>
 </template>
 
+<script setup>
+import { onMounted } from 'vue';
+import { initDatabase } from './database.js';
+import { seedDatabase } from './seed.js'; 
+
+onMounted(async () => {
+  try {
+    await initDatabase();
+    await seedDatabase(); 
+  } catch (error) {
+    console.error('Ошибка инициализации БД:', error);
+  }
+});
+</script>
+
 <style>
+
 body { margin: 0; font-family: 'Inter', sans-serif; background-color: #f8fbf9; }
 .app-layout { display: flex; height: 100vh; }
 .sidebar { width: 250px; background: #2e7d32; color: white; padding: 2rem 1rem; }
