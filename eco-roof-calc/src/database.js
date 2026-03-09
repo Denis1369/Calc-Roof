@@ -16,16 +16,19 @@ export async function initDatabase() {
   
   
 
+  
   await db.execute(`
     CREATE TABLE IF NOT EXISTS Справочник_материалов (
       идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
-      артикул_товара TEXT UNIQUE,
+      главная_категория TEXT,
+      подкатегория TEXT,
+      артикул_товара TEXT,
       полное_наименование_материала TEXT,
       единица_измерения TEXT,
-      базовая_цена REAL DEFAULT 0
+      базовая_цена REAL DEFAULT 0,
+      ссылка TEXT
     )
   `);
-
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS Справочник_видов_работ (

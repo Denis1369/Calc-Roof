@@ -3,8 +3,9 @@
     <aside class="sidebar">
       <div class="logo">Eco-Roof</div>
       <nav>
-        <router-link to="/" class="nav-link">Калькулятор</router-link>
-        <router-link to="/directories" class="nav-link">Справочники</router-link>
+        <router-link class="nav-link" to="/">Выбор системы</router-link>
+        <router-link class="nav-link" to="/calculator">Калькулятор</router-link>
+        <router-link class="nav-link" to="/directories">Справочники</router-link>
       </nav>
     </aside>
 

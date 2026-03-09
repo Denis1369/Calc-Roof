@@ -6,38 +6,52 @@
     </header>
 
     <div class="tabs">
-      <button :class="{ active: activeTab === 'materials' }" @click="activeTab = 'materials'">Материалы</button>
+      <button :class="{ active: activeTab === 'materials' }" @click="activeTab = 'materials'">Материалы (Каталог)</button>
       <button :class="{ active: activeTab === 'works' }" @click="activeTab = 'works'">Работы (Сгруппированные)</button>
     </div>
 
     <div v-if="activeTab === 'materials'" class="tab-content">
       <section class="controls-card form-section">
         <h3>Добавить новый материал</h3>
-        <form @submit.prevent="addMaterial" class="form-grid">
-          <div class="input-group">
-            <label>Артикул товара *</label>
-            <input v-model="newMaterial.артикул_товара" type="text" required />
+        <form @submit.prevent="addMaterial" class="form-vertical">
+          <div class="row-basic">
+            <div class="input-group">
+              <label>Главная категория *</label>
+              <input v-model="newMaterial.главная_категория" type="text" placeholder="Например: Комплектация" required />
+            </div>
+            <div class="input-group">
+              <label>Подкатегория</label>
+              <input v-model="newMaterial.подкатегория" type="text" placeholder="Например: Крепеж" />
+            </div>
+            <div class="input-group">
+              <label>Артикул товара *</label>
+              <input v-model="newMaterial.артикул_товара" type="text" required />
+            </div>
           </div>
-          <div class="input-group name-group">
-            <label>Полное наименование материала *</label>
-            <input v-model="newMaterial.полное_наименование_материала" type="text" required />
-          </div>
-          <div class="input-group">
-            <label>Ед. изм. *</label>
-            <select v-model="newMaterial.единица_измерения" required>
-              <option value="м2">м²</option>
-              <option value="м3">м³</option>
-              <option value="шт">шт</option>
-              <option value="м/п">м/п</option>
-              <option value="л">л</option>
-            </select>
-          </div>
-          <div class="input-group">
-            <label>Базовая цена (₽)</label>
-            <input v-model.number="newMaterial.базовая_цена" type="number" step="0.01" />
-          </div>
-          <div class="button-group">
-            <button type="submit" class="btn-success">+ Добавить</button>
+          
+          <div class="row-basic">
+            <div class="input-group name-group">
+              <label>Полное наименование материала *</label>
+              <input v-model="newMaterial.полное_наименование_материала" type="text" required />
+            </div>
+            <div class="input-group short-input">
+              <label>Ед. изм. *</label>
+              <select v-model="newMaterial.единица_измерения" required>
+                <option value="м2">м²</option>
+                <option value="м3">м³</option>
+                <option value="шт">шт</option>
+                <option value="м/п">м/п</option>
+                <option value="л">л</option>
+                <option value="кг">кг</option>
+              </select>
+            </div>
+            <div class="input-group short-input">
+              <label>Базовая цена (₽)</label>
+              <input v-model.number="newMaterial.базовая_цена" type="number" step="0.01" />
+            </div>
+            <div class="button-group">
+              <button type="submit" class="btn-success">+ Добавить материал</button>
+            </div>
           </div>
         </form>
       </section>
@@ -56,14 +70,41 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="mat in materials" :key="mat.идентификатор">
-                <td class="center">{{ mat.идентификатор }}</td>
-                <td><input v-model="mat.артикул_товара" @change="updateMaterial(mat)" class="cell-input article" /></td>
-                <td><input v-model="mat.полное_наименование_материала" @change="updateMaterial(mat)" class="cell-input text-left" /></td>
-                <td class="center"><input v-model="mat.единица_измерения" @change="updateMaterial(mat)" class="cell-input center" /></td>
-                <td><input type="number" v-model.number="mat.базовая_цена" @change="updateMaterial(mat)" class="cell-input right bold" step="0.01" /></td>
-                <td class="center"><button @click="deleteMaterial(mat.идентификатор)" class="btn-danger" title="Удалить">🗑️</button></td>
-              </tr>
+              <template v-for="(subGroups, mainCat) in groupedMaterials" :key="mainCat">
+                
+                <tr class="group-header mat-main-header" @click="toggleMatMain(mainCat)">
+                  <td colspan="6">
+                    <span class="toggle-icon">{{ collapsedMatMain[mainCat] ? '▶' : '▼' }}</span>
+                    {{ mainCat }}
+                  </td>
+                </tr>
+
+                <template v-if="!collapsedMatMain[mainCat]">
+                  <template v-for="(items, subCat) in subGroups" :key="mainCat + subCat">
+                    
+                    <tr class="group-header mat-sub-header" @click="toggleMatSub(mainCat, subCat)">
+                      <td colspan="6">
+                        <span class="toggle-icon">{{ collapsedMatSub[mainCat + '_' + subCat] ? '▶' : '▼' }}</span>
+                        {{ subCat }}
+                        <span class="group-count">({{ items.length }} шт)</span>
+                      </td>
+                    </tr>
+
+                    <template v-if="!collapsedMatSub[mainCat + '_' + subCat]">
+                      <tr v-for="mat in items" :key="mat.идентификатор">
+                        <td class="center">{{ mat.идентификатор }}</td>
+                        <td><input v-model="mat.артикул_товара" @change="updateMaterial(mat)" class="cell-input article" /></td>
+                        <td><input v-model="mat.полное_наименование_материала" @change="updateMaterial(mat)" class="cell-input text-left" /></td>
+                        <td class="center"><input v-model="mat.единица_измерения" @change="updateMaterial(mat)" class="cell-input center" /></td>
+                        <td><input type="number" v-model.number="mat.базовая_цена" @change="updateMaterial(mat)" class="cell-input right bold" step="0.01" /></td>
+                        <td class="center"><button @click="deleteMaterial(mat.идентификатор)" class="btn-danger" title="Удалить">🗑️</button></td>
+                      </tr>
+                    </template>
+
+                  </template>
+                </template>
+
+              </template>
             </tbody>
           </table>
         </div>
@@ -175,20 +216,29 @@
 import { ref, computed, onMounted } from 'vue';
 import { getDb } from '../database.js';
 
-const activeTab = ref('works');
+const activeTab = ref('materials');
 const materials = ref([]);
 const works = ref([]);
 
 
 const collapsedGroups = ref({});
 
-const newMaterial = ref({ артикул_товара: '', полное_наименование_материала: '', единица_измерения: 'м2', базовая_цена: 0 });
+
+const collapsedMatMain = ref({});
+const collapsedMatSub = ref({});
+
+const newMaterial = ref({ 
+  главная_категория: '', подкатегория: '', артикул_товара: '', 
+  полное_наименование_материала: '', единица_измерения: 'м2', базовая_цена: 0 
+});
 
 const newWork = ref({
   категория_работы: '', наименование_работы: '', единица_измерения_работы: 'м2',
   цена_0_300: 0, цена_300_600: 0, цена_600_1000: 0, цена_1000_3000: 0,
   цена_3000_6000: 0, цена_6000_15000: 0, цена_15000_30000: 0, цена_более_30000: 0
 });
+
+
 
 
 const groupedWorks = computed(() => {
@@ -201,18 +251,53 @@ const groupedWorks = computed(() => {
   return groups;
 });
 
-
 const uniqueCategories = computed(() => Object.keys(groupedWorks.value));
-
 
 function toggleGroup(category) {
   collapsedGroups.value[category] = !collapsedGroups.value[category];
 }
 
+
+
+
+const groupedMaterials = computed(() => {
+  const groups = {};
+  materials.value.forEach(mat => {
+    const main = mat.главная_категория || 'Без категории';
+    const sub = mat.подкатегория || 'Без подкатегории';
+    
+    if (!groups[main]) groups[main] = {};
+    if (!groups[main][sub]) groups[main][sub] = [];
+    
+    groups[main][sub].push(mat);
+  });
+  return groups;
+});
+
+function toggleMatMain(mainCat) {
+  collapsedMatMain.value[mainCat] = !collapsedMatMain.value[mainCat];
+}
+
+function toggleMatSub(mainCat, subCat) {
+  const key = `${mainCat}_${subCat}`;
+  collapsedMatSub.value[key] = !collapsedMatSub.value[key];
+}
+
+
+
+
 async function loadData() {
   const db = await getDb();
-  materials.value = await db.select('SELECT * FROM Справочник_материалов ORDER BY идентификатор DESC');
+  materials.value = await db.select('SELECT * FROM Справочник_материалов ORDER BY главная_категория, подкатегория, полное_наименование_материала ASC');
   works.value = await db.select('SELECT * FROM Справочник_видов_работ ORDER BY идентификатор ASC');
+  
+  
+  for (const mainCat in groupedMaterials.value) {
+    collapsedMatMain.value[mainCat] = true;
+    for (const subCat in groupedMaterials.value[mainCat]) {
+      collapsedMatSub.value[`${mainCat}_${subCat}`] = true;
+    }
+  }
 }
 
 
@@ -222,12 +307,26 @@ async function addMaterial() {
   try {
     const db = await getDb();
     await db.execute(
-      `INSERT INTO Справочник_материалов (артикул_товара, полное_наименование_материала, единица_измерения, базовая_цена) VALUES ($1, $2, $3, $4)`,
-      [newMaterial.value.артикул_товара, newMaterial.value.полное_наименование_материала, newMaterial.value.единица_измерения, newMaterial.value.базовая_цена || 0]
+      `INSERT INTO Справочник_материалов 
+      (главная_категория, подкатегория, артикул_товара, полное_наименование_материала, единица_измерения, базовая_цена) 
+      VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        newMaterial.value.главная_категория || 'Без категории',
+        newMaterial.value.подкатегория || 'Без подкатегории',
+        newMaterial.value.артикул_товара, 
+        newMaterial.value.полное_наименование_материала, 
+        newMaterial.value.единица_измерения, 
+        newMaterial.value.базовая_цена || 0
+      ]
     );
-    newMaterial.value = { артикул_товара: '', полное_наименование_материала: '', единица_измерения: 'м2', базовая_цена: 0 };
+    
+    
+    collapsedMatMain.value[newMaterial.value.главная_категория || 'Без категории'] = false;
+    collapsedMatSub.value[`${newMaterial.value.главная_категория || 'Без категории'}_${newMaterial.value.подкатегория || 'Без подкатегории'}`] = false;
+
+    newMaterial.value = { главная_категория: '', подкатегория: '', артикул_товара: '', полное_наименование_материала: '', единица_измерения: 'м2', базовая_цена: 0 };
     await loadData();
-  } catch (e) { alert('Ошибка! Возможно такой артикул уже есть.'); }
+  } catch (e) { alert('Ошибка при добавлении материала.'); console.error(e); }
 }
 
 async function addWork() {
@@ -246,7 +345,6 @@ async function addWork() {
         newWork.value.цена_15000_30000 || 0, newWork.value.цена_более_30000 || 0
       ]
     );
-    
     collapsedGroups.value[newWork.value.категория_работы] = false;
     
     newWork.value = {
@@ -319,17 +417,12 @@ onMounted(() => loadData());
   cursor: pointer;
   transition: background-color 0.2s;
 }
-.group-header:hover td {
-  background-color: #4b5563 !important; 
-}
 .group-header td {
-  background-color: #374151 !important; 
+  background-color: #374151; 
   color: #ffffff; 
   font-weight: bold;
   font-size: 1.05rem;
   padding: 0.8rem 1rem !important;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   border: none !important;
   user-select: none;
 }
@@ -343,7 +436,25 @@ onMounted(() => loadData());
   font-size: 0.85rem;
   color: #9ca3af;
   margin-left: 10px;
-  text-transform: none;
+  font-weight: normal;
+}
+
+
+.mat-main-header td {
+  background-color: #2e7d32 !important; 
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mat-main-header:hover td {
+  background-color: #1b5e20 !important;
+}
+
+.mat-sub-header td {
+  background-color: #4b5563 !important; 
+  padding-left: 2.5rem !important; 
+}
+.mat-sub-header:hover td {
+  background-color: #374151 !important;
 }
 
 
@@ -376,7 +487,7 @@ onMounted(() => loadData());
 }
 
 
-.eco-container { max-width: 1200px; margin: 0 auto; padding: 2rem; font-family: 'Inter', sans-serif; }
+.eco-container { max-width: 1400px; margin: 0 auto; padding: 2rem; font-family: 'Inter', sans-serif; }
 .header h1 { color: #2e7d32; margin-bottom: 0.5rem; }
 .tabs { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.5rem; }
 .tabs button { background: none; border: none; font-size: 1.1rem; font-weight: 600; color: #757575; cursor: pointer; padding: 0.5rem 1rem; border-radius: 6px; transition: 0.2s; }
@@ -386,14 +497,13 @@ onMounted(() => loadData());
 .controls-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 2rem; border-top: 4px solid #4caf50; }
 .work-theme { border-top-color: #1976d2; }
 
-.form-grid { display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: 1rem; align-items: end; }
-.form-vertical { display: flex; flex-direction: column; gap: 1.5rem; }
+
+.form-vertical { display: flex; flex-direction: column; gap: 1.2rem; }
 .row-basic { display: flex; gap: 1rem; align-items: end; }
 .name-group { flex: 3; }
 .short-input { flex: 1; }
 
 .section-label { font-weight: bold; font-size: 0.9rem; color: #555; margin-bottom: -1rem; display: block; }
-
 .prices-grid { 
   display: grid; 
   grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); 
@@ -407,23 +517,23 @@ onMounted(() => loadData());
 .price-input label { font-size: 0.8rem; font-weight: bold; color: #4b5563; text-align: center; white-space: nowrap; }
 .price-input input { padding: 0.5rem; border: 1px solid #ced4da; border-radius: 4px; text-align: center; font-size: 0.95rem; width: 100%; box-sizing: border-box; }
 
-.input-group { display: flex; flex-direction: column; gap: 0.4rem; }
+.input-group { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; }
 .input-group label { font-size: 0.85rem; font-weight: 600; color: #555; }
 .input-group input, .input-group select { padding: 0.6rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem; }
 
 .button-group { display: flex; align-items: flex-end; }
 .button-row { display: flex; justify-content: flex-end; }
-.btn-primary, .btn-success { color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+.btn-primary, .btn-success { color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; white-space: nowrap; }
 .btn-success { background: #2e7d32; } .btn-success:hover { background: #1b5e20; }
 .btn-primary { background: #1976d2; } .btn-primary:hover { background: #1565c0; }
 .btn-danger { background: none; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.6; } .btn-danger:hover { opacity: 1; color: red; }
 
 .result-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-.table-scroll { overflow-x: auto; }
+.table-scroll { overflow-x: auto; max-height: 75vh;  }
 .modern-table { width: 100%; border-collapse: collapse; text-align: left; }
 .wide-table { min-width: 1200px; }
-.modern-table th { background-color: #f4f6f8; color: #555; padding: 0.8rem; font-size: 0.85rem; text-align: center; border-bottom: 2px solid #ddd; white-space: nowrap; }
-.modern-table td { padding: 0; border-bottom: 1px solid #edf2f7; font-size: 0.9rem; } 
+.modern-table th { background-color: #f4f6f8; color: #555; padding: 0.8rem; font-size: 0.85rem; text-align: center; border-bottom: 2px solid #ddd; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
+.modern-table td { padding: 0; border-bottom: 1px solid #edf2f7; font-size: 0.9rem; }
 .modern-table td > button { margin: 0.6rem; }
 .article { font-family: monospace; font-weight: bold; color: #2e7d32; }
 .center { text-align: center; }
