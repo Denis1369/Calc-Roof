@@ -6,6 +6,8 @@
         <router-link class="nav-link" to="/">Выбор системы</router-link>
         <router-link class="nav-link" to="/calculator">Калькулятор</router-link>
         <router-link class="nav-link" to="/directories">Справочники</router-link>
+        <router-link class="nav-link" to="/formulas">formulas</router-link>
+        <router-link class="nav-link" to="/coefficients">coefficients</router-link>
       </nav>
     </aside>
 

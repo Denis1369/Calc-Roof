@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import CalculatorView from '../views/CalculatorView.vue'
 import DirectoriesView from '../views/DirectoriesView.vue'
 import PresetsView from '../views/PresetsView.vue'
+import FormulasView from '../views/FormulasView.vue'
+import CoefficientsView from '../views/CoefficientsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -20,6 +22,16 @@ const router = createRouter({
       path: '/directories',
       name: 'directories',
       component: DirectoriesView
+    },
+    {
+      path: '/formulas',
+      name: 'Formulas',
+      component: FormulasView
+    },
+    {
+      path: '/coefficients',
+      name: 'coefficients',
+      component: CoefficientsView
     }
   ]
 })

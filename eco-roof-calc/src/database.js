@@ -76,6 +76,23 @@ export async function initDatabase() {
     )
   `);
 
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS Справочник_коэффициентов (
+      идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
+      заголовок TEXT,
+      название TEXT,
+      значение REAL
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS Справочник_формул (
+      идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
+      название_формулы TEXT,
+      выражение TEXT
+    )
+  `);
+
   
   
   

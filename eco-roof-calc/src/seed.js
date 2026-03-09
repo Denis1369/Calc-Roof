@@ -1,5 +1,6 @@
 import { getDb } from './database.js';
 import materialsData from './tn_materials_db.json';
+import coefficientsData from './tn_coefficients_db.json'; 
 
 export async function seedDatabase() {
   const db = await getDb();
@@ -11,12 +12,11 @@ export async function seedDatabase() {
     return;
   }
 
-  console.log('Начинаем полную загрузку всех расценок из прайс-листа в SQLite...');
+  console.log('Начинаем полную загрузку всех расценок и справочников в SQLite...');
 
   
   
   
-
   for (const item of materialsData) {
       
       let rawPrice = String(item['Цена']).replace(/\s/g, '').replace(',', '.');
@@ -27,7 +27,6 @@ export async function seedDatabase() {
           priceValue = 0; 
       }
 
-      
       await db.execute(
           `INSERT INTO Справочник_материалов 
           (главная_категория, подкатегория, артикул_товара, полное_наименование_материала, базовая_цена, единица_измерения, ссылка) 
@@ -44,11 +43,6 @@ export async function seedDatabase() {
       );
   }
 
-  
-  
-  
-  
-  
   
   
   
@@ -163,6 +157,40 @@ export async function seedDatabase() {
   
   
   
+  console.log('Загрузка норм расхода и коэффициентов...');
+  for (const coef of coefficientsData) {
+    await db.execute(
+      'INSERT INTO Справочник_коэффициентов (заголовок, название, значение) VALUES ($1, $2, $3)',
+      [coef.заголовок, coef.название, coef.значение]
+    );
+  }
+
+  
+  
+  
+  console.log('Загрузка базовых формул расчета...');
+  const defaultFormulas = [
+    { name: 'Материал: Площадь в 1 слой без запаса', expression: 'S' },
+    { name: 'Материал: Периметр 1 к 1', expression: 'P' },
+    { name: 'ПВХ мембрана с нахлестом (шир. 2.1м)', expression: 'S * [КРОВЛЯ: Запас на перехлесты ПВХ мембраны шир. 2.1м]' },
+    { name: 'ПВХ мембрана с нахлестом (усредненная)', expression: 'S * [КРОВЛЯ: Запас на перехлесты ПВХ мембраны (усредненный)]' },
+    { name: 'Крепеж ПВХ в плоскость', expression: 'S * [КРОВЛЯ: Норма крепежа для мех. фиксации ПВХ мембраны на 1м2 (шт)]' },
+    { name: 'Утеплитель XPS (перевод в кубы + запас)', expression: 'S * [КРОВЛЯ: Запас теплоизоляции МИ и XPS]' }, 
+    { name: 'Праймер битумный (кг)', expression: 'S * [КРОВЛЯ: Расход праймера битумного №01 на 1м2 стяжки/бетона (кг)]' },
+    { name: 'Штучные элементы: Воронки', expression: 'ID' },
+    { name: 'Штучные элементы: Аэраторы', expression: 'A' }
+  ];
+
+  for (const form of defaultFormulas) {
+     await db.execute(
+      'INSERT INTO Справочник_формул (название_формулы, выражение) VALUES ($1, $2)',
+      [form.name, form.expression]
+     );
+  }
+
+  
+  
+  
   async function insertNorm(sectionId, type, elementId, coeff, param) {
     await db.execute(
       `INSERT INTO Нормы_в_разделе (идентификатор_раздела, тип_записи, идентификатор_элемента, коэффициент_расхода, привязка_к_параметру) 
@@ -188,5 +216,5 @@ export async function seedDatabase() {
   await insertNorm(3, 'работа', 8, 1.0, 'площадь');
   await insertNorm(3, 'материал', 12, 1.1, 'площадь');
 
-  console.log('Все справочники из CSV файла успешно загружены!');
+  console.log('Все справочники из CSV файла и коэффициенты успешно загружены!');
 }
