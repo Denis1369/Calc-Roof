@@ -57,21 +57,39 @@
       </section>
 
       <section class="result-card">
+        <div class="table-toolbar">
+          <h3>Каталог материалов</h3>
+          <input 
+            v-model="searchMaterial" 
+            placeholder="🔍 Поиск по наименованию, артикулу или категории..." 
+            class="search-input" 
+          />
+        </div>
+
         <div class="table-scroll">
-          <table class="modern-table wide-table">
+          <table class="modern-table wide-table resizable-table">
             <thead>
               <tr>
-                <th style="width: 5%;">ID</th>
-                <th style="width: 15%;">Артикул</th>
-                <th style="width: 50%;">Наименование материала</th>
-                <th style="width: 10%;">Ед. изм.</th>
-                <th style="width: 15%;">Цена (₽)</th>
-                <th style="width: 5%;"></th>
+                <th :style="{ width: matColWidths.id + 'px', minWidth: matColWidths.id + 'px' }">
+                  ID <div class="resizer" @mousedown.stop="startResize($event, 'id', matColWidths)"></div>
+                </th>
+                <th :style="{ width: matColWidths.article + 'px', minWidth: matColWidths.article + 'px' }">
+                  Артикул <div class="resizer" @mousedown.stop="startResize($event, 'article', matColWidths)"></div>
+                </th>
+                <th :style="{ width: matColWidths.name + 'px', minWidth: matColWidths.name + 'px' }">
+                  Наименование материала <div class="resizer" @mousedown.stop="startResize($event, 'name', matColWidths)"></div>
+                </th>
+                <th :style="{ width: matColWidths.unit + 'px', minWidth: matColWidths.unit + 'px' }">
+                  Ед. изм. <div class="resizer" @mousedown.stop="startResize($event, 'unit', matColWidths)"></div>
+                </th>
+                <th :style="{ width: matColWidths.price + 'px', minWidth: matColWidths.price + 'px' }">
+                  Цена (₽) <div class="resizer" @mousedown.stop="startResize($event, 'price', matColWidths)"></div>
+                </th>
+                <th :style="{ width: matColWidths.actions + 'px', minWidth: matColWidths.actions + 'px' }"></th>
               </tr>
             </thead>
             <tbody>
               <template v-for="(subGroups, mainCat) in groupedMaterials" :key="mainCat">
-                
                 <tr class="group-header mat-main-header" @click="toggleMatMain(mainCat)">
                   <td colspan="6">
                     <span class="toggle-icon">{{ collapsedMatMain[mainCat] ? '▶' : '▼' }}</span>
@@ -81,12 +99,10 @@
 
                 <template v-if="!collapsedMatMain[mainCat]">
                   <template v-for="(items, subCat) in subGroups" :key="mainCat + subCat">
-                    
                     <tr class="group-header mat-sub-header" @click="toggleMatSub(mainCat, subCat)">
                       <td colspan="6">
                         <span class="toggle-icon">{{ collapsedMatSub[mainCat + '_' + subCat] ? '▶' : '▼' }}</span>
-                        {{ subCat }}
-                        <span class="group-count">({{ items.length }} шт)</span>
+                        {{ subCat }} <span class="group-count">({{ items.length }} шт)</span>
                       </td>
                     </tr>
 
@@ -100,11 +116,12 @@
                         <td class="center"><button @click="deleteMaterial(mat.идентификатор)" class="btn-danger" title="Удалить">🗑️</button></td>
                       </tr>
                     </template>
-
                   </template>
                 </template>
-
               </template>
+              <tr v-if="Object.keys(groupedMaterials).length === 0">
+                <td colspan="6" class="center empty-message">По вашему запросу ничего не найдено</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -160,34 +177,60 @@
       </section>
 
       <section class="result-card">
+        <div class="table-toolbar">
+          <h3>Список расценок на работы</h3>
+          <input 
+            v-model="searchWork" 
+            placeholder="🔍 Поиск по наименованию или категории..." 
+            class="search-input" 
+          />
+        </div>
+
         <div class="table-scroll">
-          <table class="modern-table wide-table">
+          <table class="modern-table wide-table resizable-table">
             <thead>
               <tr>
-                <th style="width: 25%;">Наименование работы</th>
-                <th style="width: 5%;">Ед.</th>
-                <th style="width: 8%;">0-300</th>
-                <th style="width: 8%;">300-600</th>
-                <th style="width: 8%;">600-1k</th>
-                <th style="width: 8%;">1k-3k</th>
-                <th style="width: 8%;">3k-6k</th>
-                <th style="width: 8%;">6k-15k</th>
-                <th style="width: 8%;">15k-30k</th>
-                <th style="width: 8%;">>30k</th>
-                <th style="width: 4%;"></th>
+                <th :style="{ width: workColWidths.name + 'px', minWidth: workColWidths.name + 'px' }">
+                  Наименование работы <div class="resizer" @mousedown.stop="startResize($event, 'name', workColWidths)"></div>
+                </th>
+                <th :style="{ width: workColWidths.unit + 'px', minWidth: workColWidths.unit + 'px' }">
+                  Ед. <div class="resizer" @mousedown.stop="startResize($event, 'unit', workColWidths)"></div>
+                </th>
+                <th :style="{ width: workColWidths.p1 + 'px', minWidth: workColWidths.p1 + 'px' }">
+                  0-300 <div class="resizer" @mousedown.stop="startResize($event, 'p1', workColWidths)"></div>
+                </th>
+                <th :style="{ width: workColWidths.p2 + 'px', minWidth: workColWidths.p2 + 'px' }">
+                  300-600 <div class="resizer" @mousedown.stop="startResize($event, 'p2', workColWidths)"></div>
+                </th>
+                <th :style="{ width: workColWidths.p3 + 'px', minWidth: workColWidths.p3 + 'px' }">
+                  600-1k <div class="resizer" @mousedown.stop="startResize($event, 'p3', workColWidths)"></div>
+                </th>
+                <th :style="{ width: workColWidths.p4 + 'px', minWidth: workColWidths.p4 + 'px' }">
+                  1k-3k <div class="resizer" @mousedown.stop="startResize($event, 'p4', workColWidths)"></div>
+                </th>
+                <th :style="{ width: workColWidths.p5 + 'px', minWidth: workColWidths.p5 + 'px' }">
+                  3k-6k <div class="resizer" @mousedown.stop="startResize($event, 'p5', workColWidths)"></div>
+                </th>
+                <th :style="{ width: workColWidths.p6 + 'px', minWidth: workColWidths.p6 + 'px' }">
+                  6k-15k <div class="resizer" @mousedown.stop="startResize($event, 'p6', workColWidths)"></div>
+                </th>
+                <th :style="{ width: workColWidths.p7 + 'px', minWidth: workColWidths.p7 + 'px' }">
+                  15k-30k <div class="resizer" @mousedown.stop="startResize($event, 'p7', workColWidths)"></div>
+                </th>
+                <th :style="{ width: workColWidths.p8 + 'px', minWidth: workColWidths.p8 + 'px' }">
+                  >30k <div class="resizer" @mousedown.stop="startResize($event, 'p8', workColWidths)"></div>
+                </th>
+                <th :style="{ width: workColWidths.actions + 'px', minWidth: workColWidths.actions + 'px' }"></th>
               </tr>
             </thead>
             <tbody>
               <template v-for="(group, category) in groupedWorks" :key="category">
-                
                 <tr class="group-header" @click="toggleGroup(category)" title="Нажмите, чтобы свернуть/развернуть">
                   <td colspan="11">
                     <span class="toggle-icon">{{ collapsedGroups[category] ? '▶' : '▼' }}</span>
-                    {{ category }}
-                    <span class="group-count">({{ group.length }} позиций)</span>
+                    {{ category }} <span class="group-count">({{ group.length }} позиций)</span>
                   </td>
                 </tr>
-                
                 <tr v-for="work in group" :key="work.идентификатор" v-show="!collapsedGroups[category]">
                   <td><input v-model="work.наименование_работы" @change="updateWork(work)" class="cell-input text-left work-name" /></td>
                   <td class="center"><input v-model="work.единица_измерения_работы" @change="updateWork(work)" class="cell-input center" /></td>
@@ -204,6 +247,9 @@
                   </td>
                 </tr>
               </template>
+              <tr v-if="Object.keys(groupedWorks).length === 0">
+                <td colspan="11" class="center empty-message">По вашему запросу ничего не найдено</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -213,17 +259,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { getDb } from '../database.js';
 
 const activeTab = ref('materials');
 const materials = ref([]);
 const works = ref([]);
 
+const searchMaterial = ref('');
+const searchWork = ref('');
 
 const collapsedGroups = ref({});
-
-
 const collapsedMatMain = ref({});
 const collapsedMatSub = ref({});
 
@@ -241,9 +287,56 @@ const newWork = ref({
 
 
 
+const matColWidths = reactive({ id: 60, article: 150, name: 500, unit: 100, price: 120, actions: 60 });
+const workColWidths = reactive({ name: 300, unit: 70, p1: 90, p2: 90, p3: 90, p4: 90, p5: 90, p6: 90, p7: 90, p8: 90, actions: 60 });
+
+let isResizing = false;
+let currentHeader = null;
+let startX = 0;
+let startWidth = 0;
+
+function startResize(e, headerKey, colWidthsObj) {
+  isResizing = true;
+  currentHeader = { key: headerKey, obj: colWidthsObj };
+  startX = e.clientX;
+  startWidth = colWidthsObj[headerKey];
+  
+  
+  document.body.style.userSelect = 'none';
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+
+function onMouseMove(e) {
+  if (!isResizing) return;
+  const deltaX = e.clientX - startX;
+  
+  currentHeader.obj[currentHeader.key] = Math.max(50, startWidth + deltaX);
+}
+
+function onMouseUp() {
+  isResizing = false;
+  currentHeader = null;
+  document.body.style.userSelect = '';
+  document.removeEventListener('mousemove', onMouseMove);
+  document.removeEventListener('mouseup', onMouseUp);
+}
+
+
+
+
+const filteredWorks = computed(() => {
+  if (!searchWork.value) return works.value;
+  const query = searchWork.value.toLowerCase();
+  return works.value.filter(w => 
+    (w.наименование_работы && w.наименование_работы.toLowerCase().includes(query)) ||
+    (w.категория_работы && w.категория_работы.toLowerCase().includes(query))
+  );
+});
+
 const groupedWorks = computed(() => {
   const groups = {};
-  works.value.forEach(work => {
+  filteredWorks.value.forEach(work => {
     const cat = work.категория_работы || 'Общие работы';
     if (!groups[cat]) groups[cat] = [];
     groups[cat].push(work);
@@ -251,18 +344,38 @@ const groupedWorks = computed(() => {
   return groups;
 });
 
-const uniqueCategories = computed(() => Object.keys(groupedWorks.value));
+const uniqueCategories = computed(() => {
+  const cats = new Set(works.value.map(w => w.категория_работы || 'Общие работы'));
+  return Array.from(cats);
+});
 
 function toggleGroup(category) {
   collapsedGroups.value[category] = !collapsedGroups.value[category];
 }
 
+watch(searchWork, (newVal) => {
+  if (newVal.trim().length > 0) {
+    for (const cat in groupedWorks.value) collapsedGroups.value[cat] = false;
+  }
+});
 
 
+
+
+const filteredMaterials = computed(() => {
+  if (!searchMaterial.value) return materials.value;
+  const query = searchMaterial.value.toLowerCase();
+  return materials.value.filter(m => 
+    (m.полное_наименование_материала && m.полное_наименование_материала.toLowerCase().includes(query)) ||
+    (m.артикул_товара && String(m.артикул_товара).toLowerCase().includes(query)) ||
+    (m.главная_категория && m.главная_категория.toLowerCase().includes(query)) ||
+    (m.подкатегория && m.подкатегория.toLowerCase().includes(query))
+  );
+});
 
 const groupedMaterials = computed(() => {
   const groups = {};
-  materials.value.forEach(mat => {
+  filteredMaterials.value.forEach(mat => {
     const main = mat.главная_категория || 'Без категории';
     const sub = mat.подкатегория || 'Без подкатегории';
     
@@ -274,14 +387,22 @@ const groupedMaterials = computed(() => {
   return groups;
 });
 
-function toggleMatMain(mainCat) {
-  collapsedMatMain.value[mainCat] = !collapsedMatMain.value[mainCat];
-}
-
+function toggleMatMain(mainCat) { collapsedMatMain.value[mainCat] = !collapsedMatMain.value[mainCat]; }
 function toggleMatSub(mainCat, subCat) {
   const key = `${mainCat}_${subCat}`;
   collapsedMatSub.value[key] = !collapsedMatSub.value[key];
 }
+
+watch(searchMaterial, (newVal) => {
+  if (newVal.trim().length > 0) {
+    for (const mainCat in groupedMaterials.value) {
+      collapsedMatMain.value[mainCat] = false;
+      for (const subCat in groupedMaterials.value[mainCat]) {
+        collapsedMatSub.value[`${mainCat}_${subCat}`] = false;
+      }
+    }
+  }
+});
 
 
 
@@ -291,12 +412,14 @@ async function loadData() {
   materials.value = await db.select('SELECT * FROM Справочник_материалов ORDER BY главная_категория, подкатегория, полное_наименование_материала ASC');
   works.value = await db.select('SELECT * FROM Справочник_видов_работ ORDER BY идентификатор ASC');
   
-  
   for (const mainCat in groupedMaterials.value) {
     collapsedMatMain.value[mainCat] = true;
     for (const subCat in groupedMaterials.value[mainCat]) {
       collapsedMatSub.value[`${mainCat}_${subCat}`] = true;
     }
+  }
+  for (const cat in groupedWorks.value) {
+    collapsedGroups.value[cat] = true;
   }
 }
 
@@ -307,23 +430,11 @@ async function addMaterial() {
   try {
     const db = await getDb();
     await db.execute(
-      `INSERT INTO Справочник_материалов 
-      (главная_категория, подкатегория, артикул_товара, полное_наименование_материала, единица_измерения, базовая_цена) 
-      VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        newMaterial.value.главная_категория || 'Без категории',
-        newMaterial.value.подкатегория || 'Без подкатегории',
-        newMaterial.value.артикул_товара, 
-        newMaterial.value.полное_наименование_материала, 
-        newMaterial.value.единица_измерения, 
-        newMaterial.value.базовая_цена || 0
-      ]
+      `INSERT INTO Справочник_материалов (главная_категория, подкатегория, артикул_товара, полное_наименование_материала, единица_измерения, базовая_цена) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [newMaterial.value.главная_категория || 'Без категории', newMaterial.value.подкатегория || 'Без подкатегории', newMaterial.value.артикул_товара, newMaterial.value.полное_наименование_материала, newMaterial.value.единица_измерения, newMaterial.value.базовая_цена || 0]
     );
-    
-    
     collapsedMatMain.value[newMaterial.value.главная_категория || 'Без категории'] = false;
     collapsedMatSub.value[`${newMaterial.value.главная_категория || 'Без категории'}_${newMaterial.value.подкатегория || 'Без подкатегории'}`] = false;
-
     newMaterial.value = { главная_категория: '', подкатегория: '', артикул_товара: '', полное_наименование_материала: '', единица_измерения: 'м2', базовая_цена: 0 };
     await loadData();
   } catch (e) { alert('Ошибка при добавлении материала.'); console.error(e); }
@@ -333,85 +444,74 @@ async function addWork() {
   try {
     const db = await getDb();
     await db.execute(
-      `INSERT INTO Справочник_видов_работ 
-      (категория_работы, наименование_работы, единица_измерения_работы, цена_0_300, цена_300_600, цена_600_1000, цена_1000_3000, цена_3000_6000, цена_6000_15000, цена_15000_30000, цена_более_30000) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [
-        newWork.value.категория_работы || 'Общие работы',
-        newWork.value.наименование_работы, newWork.value.единица_измерения_работы,
-        newWork.value.цена_0_300 || 0, newWork.value.цена_300_600 || 0,
-        newWork.value.цена_600_1000 || 0, newWork.value.цена_1000_3000 || 0,
-        newWork.value.цена_3000_6000 || 0, newWork.value.цена_6000_15000 || 0,
-        newWork.value.цена_15000_30000 || 0, newWork.value.цена_более_30000 || 0
-      ]
+      `INSERT INTO Справочник_видов_работ (категория_работы, наименование_работы, единица_измерения_работы, цена_0_300, цена_300_600, цена_600_1000, цена_1000_3000, цена_3000_6000, цена_6000_15000, цена_15000_30000, цена_более_30000) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [newWork.value.категория_работы || 'Общие работы', newWork.value.наименование_работы, newWork.value.единица_измерения_работы, newWork.value.цена_0_300 || 0, newWork.value.цена_300_600 || 0, newWork.value.цена_600_1000 || 0, newWork.value.цена_1000_3000 || 0, newWork.value.цена_3000_6000 || 0, newWork.value.цена_6000_15000 || 0, newWork.value.цена_15000_30000 || 0, newWork.value.цена_более_30000 || 0]
     );
     collapsedGroups.value[newWork.value.категория_работы] = false;
-    
-    newWork.value = {
-      категория_работы: '', наименование_работы: '', единица_измерения_работы: 'м2',
-      цена_0_300: 0, цена_300_600: 0, цена_600_1000: 0, цена_1000_3000: 0,
-      цена_3000_6000: 0, цена_6000_15000: 0, цена_15000_30000: 0, цена_более_30000: 0
-    };
+    newWork.value = { категория_работы: '', наименование_работы: '', единица_измерения_работы: 'м2', цена_0_300: 0, цена_300_600: 0, цена_600_1000: 0, цена_1000_3000: 0, цена_3000_6000: 0, цена_6000_15000: 0, цена_15000_30000: 0, цена_более_30000: 0 };
     await loadData();
   } catch (error) { console.error(error); alert('Ошибка добавления работы'); }
 }
 
-
-
-
 async function updateMaterial(mat) {
   try {
     const db = await getDb();
-    await db.execute(
-      `UPDATE Справочник_материалов SET 
-        артикул_товара = $1, полное_наименование_материала = $2, 
-        единица_измерения = $3, базовая_цена = $4 
-       WHERE идентификатор = $5`,
-      [mat.артикул_товара, mat.полное_наименование_материала, mat.единица_измерения, mat.базовая_цена, mat.идентификатор]
-    );
+    await db.execute(`UPDATE Справочник_материалов SET артикул_товара = $1, полное_наименование_материала = $2, единица_измерения = $3, базовая_цена = $4 WHERE идентификатор = $5`, [mat.артикул_товара, mat.полное_наименование_материала, mat.единица_измерения, mat.базовая_цена, mat.идентификатор]);
   } catch (e) { console.error("Ошибка обновления материала", e); }
 }
 
 async function updateWork(work) {
   try {
     const db = await getDb();
-    await db.execute(
-      `UPDATE Справочник_видов_работ SET 
-        наименование_работы = $1, единица_измерения_работы = $2, 
-        цена_0_300 = $3, цена_300_600 = $4, цена_600_1000 = $5, 
-        цена_1000_3000 = $6, цена_3000_6000 = $7, цена_6000_15000 = $8, 
-        цена_15000_30000 = $9, цена_более_30000 = $10
-       WHERE идентификатор = $11`,
-      [
-        work.наименование_работы, work.единица_измерения_работы,
-        work.цена_0_300 || 0, work.цена_300_600 || 0, work.цена_600_1000 || 0,
-        work.цена_1000_3000 || 0, work.цена_3000_6000 || 0, work.цена_6000_15000 || 0,
-        work.цена_15000_30000 || 0, work.цена_более_30000 || 0,
-        work.идентификатор
-      ]
-    );
+    await db.execute(`UPDATE Справочник_видов_работ SET наименование_работы = $1, единица_измерения_работы = $2, цена_0_300 = $3, цена_300_600 = $4, цена_600_1000 = $5, цена_1000_3000 = $6, цена_3000_6000 = $7, цена_6000_15000 = $8, цена_15000_30000 = $9, цена_более_30000 = $10 WHERE идентификатор = $11`, [work.наименование_работы, work.единица_измерения_работы, work.цена_0_300 || 0, work.цена_300_600 || 0, work.цена_600_1000 || 0, work.цена_1000_3000 || 0, work.цена_3000_6000 || 0, work.цена_6000_15000 || 0, work.цена_15000_30000 || 0, work.цена_более_30000 || 0, work.идентификатор]);
   } catch (e) { console.error("Ошибка обновления расценки", e); }
 }
-
-
-
 
 async function deleteMaterial(id) {
   if (confirm('Удалить материал?')) {
     const db = await getDb(); await db.execute('DELETE FROM Справочник_материалов WHERE идентификатор = $1', [id]); await loadData();
   }
 }
-
 async function deleteWork(id) {
   if (confirm('Удалить расценку на работу?')) {
     const db = await getDb(); await db.execute('DELETE FROM Справочник_видов_работ WHERE идентификатор = $1', [id]); await loadData();
   }
 }
-
 onMounted(() => loadData());
 </script>
 
 <style scoped>
+
+.table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.2rem;
+}
+.table-toolbar h3 {
+  margin: 0;
+  color: #333;
+}
+.search-input {
+  width: 450px;
+  padding: 0.6rem 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.2s ease-in-out;
+}
+.search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.empty-message {
+  padding: 2rem !important;
+  color: #6b7280;
+  font-style: italic;
+  font-size: 1rem;
+}
+
 
 .group-header {
   cursor: pointer;
@@ -426,65 +526,24 @@ onMounted(() => loadData());
   border: none !important;
   user-select: none;
 }
-.toggle-icon {
-  display: inline-block;
-  width: 20px;
-  font-size: 0.9rem;
-  color: #9ca3af;
-}
-.group-count {
-  font-size: 0.85rem;
-  color: #9ca3af;
-  margin-left: 10px;
-  font-weight: normal;
-}
+.toggle-icon { display: inline-block; width: 20px; font-size: 0.9rem; color: #9ca3af; }
+.group-count { font-size: 0.85rem; color: #9ca3af; margin-left: 10px; font-weight: normal; }
 
 
-.mat-main-header td {
-  background-color: #2e7d32 !important; 
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.mat-main-header:hover td {
-  background-color: #1b5e20 !important;
-}
-
-.mat-sub-header td {
-  background-color: #4b5563 !important; 
-  padding-left: 2.5rem !important; 
-}
-.mat-sub-header:hover td {
-  background-color: #374151 !important;
-}
+.mat-main-header td { background-color: #2e7d32 !important; text-transform: uppercase; letter-spacing: 0.05em; }
+.mat-main-header:hover td { background-color: #1b5e20 !important; }
+.mat-sub-header td { background-color: #4b5563 !important; padding-left: 2.5rem !important; }
+.mat-sub-header:hover td { background-color: #374151 !important; }
 
 
 .cell-input {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 0.6rem;
-  border: 1px solid transparent;
-  background: transparent;
-  font-family: inherit;
-  font-size: 0.9rem;
-  color: inherit;
-  transition: all 0.2s;
+  width: 100%; height: 100%; box-sizing: border-box; padding: 0.6rem;
+  border: 1px solid transparent; background: transparent;
+  font-family: inherit; font-size: 0.9rem; color: inherit; transition: all 0.2s;
 }
-.cell-input:hover {
-  background-color: #f3f4f6;
-  border-radius: 4px;
-}
-.cell-input:focus {
-  background-color: #ffffff;
-  border: 1px solid #3b82f6;
-  outline: none;
-  border-radius: 4px;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-.work-name {
-  font-weight: 600;
-  color: #1f2937;
-}
+.cell-input:hover { background-color: #f3f4f6; border-radius: 4px; }
+.cell-input:focus { background-color: #ffffff; border: 1px solid #3b82f6; outline: none; border-radius: 4px; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+.work-name { font-weight: 600; color: #1f2937; }
 
 
 .eco-container { max-width: 1400px; margin: 0 auto; padding: 2rem; font-family: 'Inter', sans-serif; }
@@ -504,15 +563,7 @@ onMounted(() => loadData());
 .short-input { flex: 1; }
 
 .section-label { font-weight: bold; font-size: 0.9rem; color: #555; margin-bottom: -1rem; display: block; }
-.prices-grid { 
-  display: grid; 
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); 
-  gap: 0.8rem; 
-  background: #f8f9fa; 
-  padding: 1rem; 
-  border-radius: 8px; 
-  border: 1px solid #e0e0e0; 
-}
+.prices-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.8rem; background: #f8f9fa; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0; }
 .price-input { display: flex; flex-direction: column; gap: 0.3rem; }
 .price-input label { font-size: 0.8rem; font-weight: bold; color: #4b5563; text-align: center; white-space: nowrap; }
 .price-input input { padding: 0.5rem; border: 1px solid #ced4da; border-radius: 4px; text-align: center; font-size: 0.95rem; width: 100%; box-sizing: border-box; }
@@ -529,12 +580,42 @@ onMounted(() => loadData());
 .btn-danger { background: none; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.6; } .btn-danger:hover { opacity: 1; color: red; }
 
 .result-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-.table-scroll { overflow-x: auto; max-height: 75vh;  }
-.modern-table { width: 100%; border-collapse: collapse; text-align: left; }
-.wide-table { min-width: 1200px; }
-.modern-table th { background-color: #f4f6f8; color: #555; padding: 0.8rem; font-size: 0.85rem; text-align: center; border-bottom: 2px solid #ddd; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
-.modern-table td { padding: 0; border-bottom: 1px solid #edf2f7; font-size: 0.9rem; }
+.table-scroll { overflow-x: auto; max-height: 75vh; }
+
+
+.resizable-table { table-layout: fixed; width: max-content; min-width: 100%; }
+.modern-table { border-collapse: collapse; text-align: left; }
+.modern-table th { 
+  position: sticky; 
+  top: 0; 
+  z-index: 2; 
+  background-color: #f4f6f8; 
+  color: #555; 
+  padding: 0.8rem; 
+  font-size: 0.85rem; 
+  text-align: center; 
+  border-bottom: 2px solid #ddd; 
+  border-right: 1px solid #ddd; 
+  white-space: nowrap; 
+}
+.modern-table td { padding: 0; border-bottom: 1px solid #edf2f7; font-size: 0.9rem; border-right: 1px solid #f1f5f9; }
 .modern-table td > button { margin: 0.6rem; }
+
+
+.resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  background-color: transparent;
+  z-index: 10;
+}
+.resizer:hover, .resizer:active {
+  background-color: #3b82f6; 
+}
+
 .article { font-family: monospace; font-weight: bold; color: #2e7d32; }
 .center { text-align: center; }
 .right { text-align: right; }

@@ -4,6 +4,7 @@ import DirectoriesView from '../views/DirectoriesView.vue'
 import PresetsView from '../views/PresetsView.vue'
 import FormulasView from '../views/FormulasView.vue'
 import CoefficientsView from '../views/CoefficientsView.vue'
+import TriggersView from '../views/TriggersView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -32,6 +33,11 @@ const router = createRouter({
       path: '/coefficients',
       name: 'coefficients',
       component: CoefficientsView
+    },
+    {
+      path: '/triggers',
+      name: 'triggers',
+      component: TriggersView
     }
   ]
 })

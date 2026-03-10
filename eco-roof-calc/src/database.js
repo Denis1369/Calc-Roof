@@ -93,6 +93,19 @@ export async function initDatabase() {
     )
   `);
 
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS Справочник_макросов (
+      идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
+      описание TEXT,
+      условие TEXT,
+      название_работы TEXT,
+      формула_работы TEXT,
+      название_материала TEXT,
+      ед_изм_материала TEXT,
+      формула_материала TEXT
+    )
+  `);
+
   
   
   

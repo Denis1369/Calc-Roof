@@ -17,55 +17,49 @@
           <button @click="printEstimate" class="btn-secondary">🖨️ Печать</button>
         </div>
       </div>
-
-      <hr class="divider" />
-
-      <div class="roof-params-block">
-        <h3>Ввод параметров крыши (влияют на расчет объемов)</h3>
-        <div class="params-grid">
-          <div class="input-group">
-            <label>Общая площадь (S, м²)</label>
-            <input type="number" v-model.number="roofParams.area" @input="recalculateVolumes" placeholder="Например: 603" min="0" step="0.1" />
-          </div>
-          <div class="input-group">
-            <label>Периметр (P, пог.м)</label>
-            <input type="number" v-model.number="roofParams.perimeter" @input="recalculateVolumes" placeholder="Например: 108.7" min="0" step="0.1" />
-          </div>
-          <div class="input-group">
-            <label>Водоотведение парапетное (шт)</label>
-            <input type="number" v-model.number="roofParams.parapetDrains" @input="recalculateVolumes" placeholder="Например: 7" min="0" />
-          </div>
-          <div class="input-group">
-            <label>Воронки (ID, шт)</label>
-            <input type="number" v-model.number="roofParams.innerDrains" @input="recalculateVolumes" placeholder="Например: 2" min="0" />
-          </div>
-          <div class="input-group">
-            <label>Аэраторы (A, шт)</label>
-            <input type="number" v-model.number="roofParams.aerators" @input="recalculateVolumes" placeholder="Например: 4" min="0" />
-          </div>
-        </div>
-      </div>
-      
-      <div class="actions-row mt-3">
-        <button @click="addZone" class="btn-primary">+ Добавить участок (ось)</button>
-      </div>
     </section>
 
     <div class="estimate-body">
       
       <div class="document-header-text">
-        <strong>Данные крыши:</strong><br/>
-        Суммарная площадь кровель = {{ roofParams.area }} м2,<br/>
-        Примыкания к парапету и вертикальным конструкциям = {{ roofParams.perimeter }} пог.м.,<br/>
-        Водоотведение парапетное = {{ roofParams.parapetDrains }} шт.,<br/>
-        Водоотведение внутреннее = {{ roofParams.innerDrains }} шт.,<br/>
-        Аэраторы = {{ roofParams.aerators }} шт.
+        <strong>Общие суммарные данные по всем участкам:</strong><br/>
+        Суммарная площадь кровель = <span class="bold text-blue">{{ globalRoofParams.area.toFixed(2) }}</span> м2,<br/>
+        Примыкания к парапету и вертикальным конструкциям = <span class="bold text-blue">{{ globalRoofParams.perimeter.toFixed(2) }}</span> пог.м.,<br/>
+        Водоотведение парапетное = {{ globalRoofParams.parapetDrains }} шт.,<br/>
+        Водоотведение внутреннее = {{ globalRoofParams.innerDrains }} шт.,<br/>
+        Аэраторы = {{ globalRoofParams.aerators }} шт.
       </div>
 
       <div v-for="(zone, zIdx) in estimateZones" :key="zone.id" class="zone-block">
         <div class="zone-header">
           <input v-model="zone.name" class="zone-title-input" placeholder="Название участка (например: Монтаж кровли в осях: 6-22/А-И)" />
           <button @click="removeZone(zIdx)" class="btn-icon text-danger hide-on-print" title="Удалить участок">✕</button>
+        </div>
+
+        <div class="zone-params-block hide-on-print">
+          <div class="zone-params-title">Ввод параметров для этого участка (для формул):</div>
+          <div class="params-grid">
+            <div class="input-group">
+              <label>Площадь (S, м²)</label>
+              <input type="number" v-model.number="zone.roofParams.area" @input="recalculateVolumes" placeholder="0" min="0" step="0.1" />
+            </div>
+            <div class="input-group">
+              <label>Периметр (P, пог.м)</label>
+              <input type="number" v-model.number="zone.roofParams.perimeter" @input="recalculateVolumes" placeholder="0" min="0" step="0.1" />
+            </div>
+            <div class="input-group">
+              <label>Водоотвод парапет. (шт)</label>
+              <input type="number" v-model.number="zone.roofParams.parapetDrains" @input="recalculateVolumes" placeholder="0" min="0" />
+            </div>
+            <div class="input-group">
+              <label>Воронки (ID, шт)</label>
+              <input type="number" v-model.number="zone.roofParams.innerDrains" @input="recalculateVolumes" placeholder="0" min="0" />
+            </div>
+            <div class="input-group">
+              <label>Аэраторы (A, шт)</label>
+              <input type="number" v-model.number="zone.roofParams.aerators" @input="recalculateVolumes" placeholder="0" min="0" />
+            </div>
+          </div>
         </div>
 
         <div v-for="(section, sIdx) in zone.sections" :key="section.id" class="section-block">
@@ -80,6 +74,7 @@
               <table class="data-table">
                 <thead>
                   <tr>
+                    <th class="col-code">Код</th>
                     <th class="col-name">Наименование работ</th>
                     <th class="col-unit">Ед.изм.</th>
                     <th class="col-formula">Формула расчета</th>
@@ -91,11 +86,12 @@
                 </thead>
                 <tbody>
                   <tr v-for="(work, wIdx) in section.works" :key="wIdx">
+                    <td class="center bold text-blue" title="Используйте этот код в формулах, например: [Р1]">{{ work.code }}</td>
                     <td>
                       <input 
                         v-model="work.name" 
                         list="works-list"
-                        @change="updateWorkPrice(work)"
+                        @change="onWorkNameChange(work, section)"
                         class="cell-input text-left" 
                         placeholder="Начните вводить для поиска..." 
                       />
@@ -108,7 +104,7 @@
                         @input="recalculateVolumes" 
                         list="formulas-list"
                         class="cell-input formula-input center" 
-                        placeholder="Напр: S * 1.1" 
+                        placeholder="Напр: [Р1] * 1.1" 
                       />
                     </td>
                     <td class="center bold qty-display">{{ work.qty }}</td>
@@ -132,6 +128,7 @@
               <table class="data-table">
                 <thead>
                   <tr>
+                    <th class="col-code">Код</th>
                     <th class="col-name">Наименование материалов</th>
                     <th class="col-unit">Ед.изм.</th>
                     <th class="col-formula">Формула расчета</th>
@@ -143,11 +140,12 @@
                 </thead>
                 <tbody>
                   <tr v-for="(mat, mIdx) in section.materials" :key="mIdx">
+                    <td class="center bold text-blue" title="Используйте этот код в формулах, например: [М1]">{{ mat.code }}</td>
                     <td>
                       <input 
                         v-model="mat.name" 
                         list="materials-list"
-                        @change="updateMaterialPrice(mat)"
+                        @change="onMaterialNameChange(mat, section)"
                         class="cell-input text-left" 
                         placeholder="Начните вводить для поиска..." 
                       />
@@ -160,7 +158,7 @@
                         @input="recalculateVolumes" 
                         list="formulas-list"
                         class="cell-input formula-input center" 
-                        placeholder="Напр: S * 1.15" 
+                        placeholder="Напр: [Р2] * 0.35" 
                       />
                     </td>
                     <td class="center bold qty-display">{{ mat.qty }}</td>
@@ -188,6 +186,10 @@
         <div class="add-section-row hide-on-print">
           <button @click="addSection(zone)" class="btn-outline">+ Добавить раздел в этот участок</button>
         </div>
+      </div>
+
+      <div class="add-zone-row hide-on-print">
+        <button @click="addZone" class="btn-primary btn-large">+ Добавить новый участок (ось)</button>
       </div>
 
       <section class="grand-totals">
@@ -239,7 +241,6 @@
     <datalist id="materials-list">
       <option v-for="m in materialsDb" :key="m.идентификатор" :value="m.полное_наименование_материала"></option>
     </datalist>
-    
     <datalist id="formulas-list">
       <option v-for="f in formulasDb" :key="f.идентификатор" :value="f.название_формулы">{{ f.выражение }}</option>
     </datalist>
@@ -261,14 +262,7 @@ const worksDb = ref([]);
 const materialsDb = ref([]);
 const formulasDb = ref([]);
 const coefficientsDb = ref([]);
-
-const roofParams = ref({
-  area: 0,
-  perimeter: 0,
-  parapetDrains: 0,
-  innerDrains: 0,
-  aerators: 0
-});
+const macrosDb = ref([]); 
 
 const estimateZones = ref([]);
 
@@ -278,6 +272,21 @@ const overheadExpenses = ref([
 ]);
 
 let nextId = 1000;
+const codeCounters = ref({ work: 1, mat: 1 }); 
+
+
+
+
+const globalRoofParams = computed(() => {
+  return estimateZones.value.reduce((acc, zone) => {
+    acc.area += (zone.roofParams?.area || 0);
+    acc.perimeter += (zone.roofParams?.perimeter || 0);
+    acc.parapetDrains += (zone.roofParams?.parapetDrains || 0);
+    acc.innerDrains += (zone.roofParams?.innerDrains || 0);
+    acc.aerators += (zone.roofParams?.aerators || 0);
+    return acc;
+  }, { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 });
+});
 
 
 
@@ -289,6 +298,14 @@ onMounted(async () => {
     materialsDb.value = await db.select('SELECT * FROM Справочник_материалов');
     formulasDb.value = await db.select('SELECT * FROM Справочник_формул');
     coefficientsDb.value = await db.select('SELECT * FROM Справочник_коэффициентов');
+    
+    
+    try {
+      macrosDb.value = await db.select('SELECT * FROM Справочник_макросов');
+    } catch (e) {
+      console.warn('Таблица Справочник_макросов не найдена или пуста.', e);
+    }
+
   } catch (error) {
     console.error('Ошибка при загрузке баз данных:', error);
   }
@@ -334,14 +351,74 @@ function updateMaterialPrice(mat) {
 }
 
 
+function onWorkNameChange(work, section) {
+  updateWorkPrice(work);
 
+  if (!work.name) return;
+  const nameLower = work.name.toLowerCase();
+
+  
+  for (const macro of macrosDb.value) {
+    if (!macro.условие) continue;
+    
+    
+    const keywords = macro.условие.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+    const isMatch = keywords.every(kw => nameLower.includes(kw));
+
+    if (isMatch) {
+      
+      if (macro.название_работы && work.name !== macro.название_работы) {
+        work.name = macro.название_работы;
+        updateWorkPrice(work); 
+      }
+
+      
+      if (macro.формула_работы && !work.expression) {
+        work.expression = macro.формула_работы;
+      }
+
+      
+      if (macro.название_материала) {
+        
+        const hasMaterial = section.materials.some(m => m.name === macro.название_материала);
+        
+        if (!hasMaterial) {
+          
+          const rawFormula = macro.формула_материала || '';
+          const finalFormula = rawFormula.replace(/\[WORK_CODE\]/g, `[${work.code}]`);
+          
+          const newMat = { 
+            code: 'М' + codeCounters.value.mat++, 
+            name: macro.название_материала, 
+            unit: macro.ед_изм_материала || 'шт', 
+            expression: finalFormula, 
+            qty: 0, 
+            price: 0 
+          };
+          
+          updateMaterialPrice(newMat); 
+          section.materials.push(newMat);
+        }
+      }
+      
+      
+      break; 
+    }
+  }
+
+  
+  recalculateVolumes();
+}
+
+function onMaterialNameChange(mat, section) {
+  updateMaterialPrice(mat);
+  recalculateVolumes();
+}
 
 function applyFormula(item) {
   if (item.expression) {
-    
     const dbFormula = formulasDb.value.find(f => f.название_формулы === item.expression);
     if (dbFormula) {
-      
       item.expression = dbFormula.выражение;
     }
   }
@@ -351,22 +428,82 @@ function applyFormula(item) {
 
 
 
-function parseAndEvaluate(expr) {
+function assignMissingCodes() {
+  let maxWork = 0;
+  let maxMat = 0;
+  
+  estimateZones.value.forEach(zone => {
+    zone.sections.forEach(sec => {
+      sec.works.forEach(w => {
+        if (w.code && w.code.startsWith('Р')) {
+          const num = parseInt(w.code.substring(1));
+          if (!isNaN(num) && num > maxWork) maxWork = num;
+        }
+      });
+      sec.materials.forEach(m => {
+        if (m.code && m.code.startsWith('М')) {
+          const num = parseInt(m.code.substring(1));
+          if (!isNaN(num) && num > maxMat) maxMat = num;
+        }
+      });
+    });
+  });
+  
+  codeCounters.value.work = maxWork + 1;
+  codeCounters.value.mat = maxMat + 1;
+  
+  estimateZones.value.forEach(zone => {
+    zone.sections.forEach(sec => {
+      sec.works.forEach(w => { if (!w.code) w.code = 'Р' + codeCounters.value.work++; });
+      sec.materials.forEach(m => { if (!m.code) m.code = 'М' + codeCounters.value.mat++; });
+    });
+  });
+}
+
+
+
+
+function parseAndEvaluate(expr, itemsMap, currentCode, currentName, zoneParams) {
   if (!expr && expr !== 0) return 0;
   let exprStr = String(expr).trim().replace(/,/g, '.');
   if (exprStr === '') return 0;
 
   try {
     let parsedExpr = exprStr.replace(/\[(.*?)\]/g, (match, paramName) => {
-      const coef = coefficientsDb.value.find(c => c.название === paramName.trim());
-      return coef ? coef.значение : 1;
+      let cleanName = paramName.trim();
+      
+      const codeMatch = cleanName.match(/^([pPрРmMмМ])(\d+)$/);
+      if (codeMatch) {
+        const letter = codeMatch[1];
+        const num = codeMatch[2];
+
+        if (['p', 'P', 'р', 'Р'].includes(letter)) {
+          cleanName = 'Р' + num;
+        } 
+        else if (['m', 'M', 'м', 'М'].includes(letter)) {
+          cleanName = 'М' + num;
+        }
+      }
+
+      if (cleanName === currentCode || (currentName && cleanName === currentName.trim())) {
+        return 1; 
+      }
+
+      const coef = coefficientsDb.value.find(c => c.название === cleanName);
+      if (coef) return coef.значение;
+
+      if (itemsMap && itemsMap[cleanName] !== undefined) {
+        return itemsMap[cleanName];
+      }
+
+      return 1;
     });
 
     const context = {
-      S: roofParams.value.area || 0,        s: roofParams.value.area || 0,
-      P: roofParams.value.perimeter || 0,   p: roofParams.value.perimeter || 0,
-      ID: roofParams.value.innerDrains || 0, id: roofParams.value.innerDrains || 0,
-      A: roofParams.value.aerators || 0,    a: roofParams.value.aerators || 0
+      S: zoneParams.area || 0,        s: zoneParams.area || 0,
+      P: zoneParams.perimeter || 0,   p: zoneParams.perimeter || 0,
+      ID: zoneParams.innerDrains || 0, id: zoneParams.innerDrains || 0,
+      A: zoneParams.aerators || 0,    a: zoneParams.aerators || 0
     };
     
     const result = evaluate(parsedExpr, context);
@@ -377,17 +514,42 @@ function parseAndEvaluate(expr) {
 }
 
 function recalculateVolumes() {
-  estimateZones.value.forEach(zone => {
-    zone.sections.forEach(section => {
-      section.works.forEach(work => {
-        work.qty = parseAndEvaluate(work.expression);
-        updateWorkPrice(work);
-      });
-      section.materials.forEach(mat => {
-        mat.qty = parseAndEvaluate(mat.expression);
+  assignMissingCodes();
+
+  const itemsMap = {};
+  
+  for (let pass = 0; pass < 3; pass++) {
+    estimateZones.value.forEach(zone => {
+      if (!zone.roofParams) {
+        zone.roofParams = { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 };
+      }
+      const zParams = zone.roofParams;
+
+      zone.sections.forEach(section => {
+        section.works.forEach(work => {
+          let val = parseAndEvaluate(work.expression, itemsMap, work.code, work.name, zParams);
+          if (work.code) itemsMap[work.code] = val;
+          if (work.name) itemsMap[work.name.trim()] = val;
+          
+          if (pass === 2) {
+            work.qty = val;
+            updateWorkPrice(work);
+          }
+        });
+        
+        section.materials.forEach(mat => {
+          let val = parseAndEvaluate(mat.expression, itemsMap, mat.code, mat.name, zParams);
+          if (mat.code) itemsMap[mat.code] = val;
+          if (mat.name) itemsMap[mat.name.trim()] = val;
+          
+          if (pass === 2) {
+            mat.qty = val;
+          }
+        });
+        
       });
     });
-  });
+  }
 }
 
 
@@ -397,6 +559,7 @@ function loadPresetTemplate(presetId) {
   const templates = {
     'tn-krovlya-smart': {
       name: 'Монтаж ТН-КРОВЛЯ Смарт (Профлист + ПВХ)',
+      roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
       sections: [
         {
           id: nextId++, title: '1. Устройство пароизоляции',
@@ -428,6 +591,7 @@ function loadPresetTemplate(presetId) {
     },
     'tn-krovlya-classic': {
       name: 'Монтаж ТН-КРОВЛЯ Классик (Бетон + Битум)',
+      roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
       sections: [
         {
           id: nextId++, title: '1. Подготовка основания и пароизоляция',
@@ -462,6 +626,7 @@ function loadPresetTemplate(presetId) {
   estimateZones.value = [{
     id: nextId++,
     name: selectedPreset.name,
+    roofParams: { ...selectedPreset.roofParams },
     sections: selectedPreset.sections
   }];
   
@@ -477,9 +642,6 @@ function loadPresetTemplate(presetId) {
   recalculateVolumes();
 }
 
-
-
-
 async function saveProject() {
   if (!projectName.value) {
     alert('Пожалуйста, укажите название проекта перед сохранением!');
@@ -488,7 +650,6 @@ async function saveProject() {
   try {
     const db = await getDb();
     const projectSnapshot = {
-      roofParams: roofParams.value,
       estimateZones: estimateZones.value,
       overheadExpenses: overheadExpenses.value
     };
@@ -517,10 +678,16 @@ async function loadProject() {
     
     if (result.length > 0) {
       const loadedData = JSON.parse(result[0].данные_сметы_json);
-      roofParams.value = loadedData.roofParams || { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 };
+      
+      const fallbackGlobalParams = loadedData.roofParams || { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 };
+      
       estimateZones.value = loadedData.estimateZones || [];
       
       estimateZones.value.forEach(zone => {
+        if (!zone.roofParams) {
+          zone.roofParams = { ...fallbackGlobalParams };
+        }
+        
         zone.sections.forEach(sec => {
           sec.works.forEach(w => { if (w.expression === undefined) w.expression = w.qty; });
           sec.materials.forEach(m => { if (m.expression === undefined) m.expression = m.qty; });
@@ -543,13 +710,24 @@ async function loadProject() {
 
 
 
-function addZone() { estimateZones.value.push({ id: nextId++, name: 'Новый участок (ось)', sections: [] }); }
+function addZone() { 
+  estimateZones.value.push({ 
+    id: nextId++, 
+    name: 'Новый участок (ось)', 
+    roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
+    sections: [] 
+  }); 
+}
 function removeZone(index) { if (confirm('Удалить весь участок со всеми расчетами?')) estimateZones.value.splice(index, 1); }
 function addSection(zone) { zone.sections.push({ id: nextId++, title: 'Новый раздел', works: [], materials: [] }); }
 function removeSection(zone, sIdx) { if (confirm('Удалить раздел?')) zone.sections.splice(sIdx, 1); }
 
-function addWork(section) { section.works.push({ name: '', unit: 'м2', expression: '', qty: 0, price: 0 }); }
-function addMaterial(section) { section.materials.push({ name: '', unit: 'шт', expression: '', qty: 0, price: 0 }); }
+function addWork(section) { 
+  section.works.push({ code: 'Р' + codeCounters.value.work++, name: '', unit: 'м2', expression: '', qty: 0, price: 0 }); 
+}
+function addMaterial(section) { 
+  section.materials.push({ code: 'М' + codeCounters.value.mat++, name: '', unit: 'шт', expression: '', qty: 0, price: 0 }); 
+}
 function addExpense() { overheadExpenses.value.push({ name: 'Новый расход', unit: 'ед', qty: 1, price: 0 }); }
 
 
@@ -591,11 +769,6 @@ function printEstimate() { window.print(); }
 .action-buttons { display: flex; gap: 0.8rem; }
 .divider { border: 0; border-top: 1px solid #dee2e6; margin: 1rem 0; }
 
-
-.roof-params-block h3 { margin-top: 0; font-size: 1.1rem; color: #2e7d32; }
-.params-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
-.params-grid input { padding: 0.6rem; border: 1px solid #0d6efd; border-radius: 4px; font-size: 1rem; font-weight: bold; background: #f0f8ff; }
-
 .btn-primary, .btn-secondary, .btn-success, .btn-warning, .btn-outline { padding: 0.6rem 1.2rem; border-radius: 4px; cursor: pointer; font-weight: bold; border: none; transition: 0.2s; }
 .btn-primary { background: #0d6efd; color: white; }
 .btn-secondary { background: #6c757d; color: white; }
@@ -607,13 +780,24 @@ function printEstimate() { window.print(); }
 .btn-icon:hover { opacity: 1; }
 .text-danger { color: #dc3545; }
 
+
+.add-zone-row { display: flex; justify-content: center; margin: 2rem 0; }
+.btn-large { font-size: 1.1rem; padding: 1rem 2rem; box-shadow: 0 4px 6px rgba(13, 110, 253, 0.2); }
+
 .document-header-text { margin-bottom: 2rem; padding: 1rem; border-left: 4px solid #0d6efd; background: #f8f9fa; font-size: 1.05rem; line-height: 1.6; }
 
 
 .zone-block { margin-bottom: 3rem; border: 2px solid #343a40; padding: 1.5rem; border-radius: 8px; }
-.zone-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; background: #343a40; padding: 0.5rem 1rem; border-radius: 4px; }
+.zone-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: #343a40; padding: 0.5rem 1rem; border-radius: 4px; }
 .zone-title-input { background: transparent; border: none; color: white; font-size: 1.3rem; font-weight: bold; width: 100%; outline: none; }
 .zone-title-input::placeholder { color: #adb5bd; }
+
+
+.zone-params-block { background: #e9ecef; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; border: 1px solid #ced4da; }
+.zone-params-title { font-weight: bold; margin-bottom: 0.8rem; color: #495057; font-size: 0.95rem; }
+.params-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+.params-grid input { padding: 0.6rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 1rem; font-weight: bold; background: #fff; }
+.params-grid input:focus { border-color: #0d6efd; outline: none; }
 
 .section-block { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px dashed #ced4da; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
@@ -627,7 +811,8 @@ function printEstimate() { window.print(); }
 .data-table th { background-color: #f2f2f2; text-align: center; font-weight: bold; padding: 0.5rem; }
 
 
-.col-name { width: 32%; }
+.col-code { width: 5%; }
+.col-name { width: 27%; }
 .col-unit { width: 6%; }
 .col-formula { width: 22%; }
 .col-qty { width: 8%; }
@@ -640,6 +825,7 @@ function printEstimate() { window.print(); }
 .cell-input:focus { background-color: #e9ecef; outline: none; }
 .formula-input { color: #d81b60; font-family: monospace; font-size: 1rem; font-weight: bold; }
 .qty-display { background: #f8f9fa; color: #2e7d32; font-size: 1rem; }
+.text-blue { color: #1976d2; font-family: monospace; font-size: 1.1em; }
 
 .text-left { text-align: left; }
 .center { text-align: center; }
