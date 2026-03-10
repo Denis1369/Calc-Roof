@@ -40,6 +40,14 @@
           <div class="zone-params-title">Ввод параметров для этого участка (для формул):</div>
           <div class="params-grid">
             <div class="input-group">
+              <label>Тип основания</label>
+              <select v-model="zone.baseType" class="type-select">
+                <option value="профлист">По профлисту</option>
+                <option value="жб">По ж/б (бетону)</option>
+              </select>
+            </div>
+            
+            <div class="input-group">
               <label>Площадь (S, м²)</label>
               <input type="number" v-model.number="zone.roofParams.area" @input="recalculateVolumes" placeholder="0" min="0" step="0.1" />
             </div>
@@ -299,7 +307,6 @@ onMounted(async () => {
     formulasDb.value = await db.select('SELECT * FROM Справочник_формул');
     coefficientsDb.value = await db.select('SELECT * FROM Справочник_коэффициентов');
     
-    
     try {
       macrosDb.value = await db.select('SELECT * FROM Справочник_макросов');
     } catch (e) {
@@ -351,62 +358,45 @@ function updateMaterialPrice(mat) {
 }
 
 
-function onWorkNameChange(work, section) {
+async function onWorkNameChange(work, section) {
   updateWorkPrice(work);
-
   if (!work.name) return;
   const nameLower = work.name.toLowerCase();
 
-  
   for (const macro of macrosDb.value) {
-    if (!macro.условие) continue;
-    
-    
     const keywords = macro.условие.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
-    const isMatch = keywords.every(kw => nameLower.includes(kw));
-
-    if (isMatch) {
+    if (keywords.every(kw => nameLower.includes(kw))) {
       
-      if (macro.название_работы && work.name !== macro.название_работы) {
-        work.name = macro.название_работы;
-        updateWorkPrice(work); 
-      }
+      
+      if (macro.название_работы) work.name = macro.название_работы;
+      if (macro.формула_работы) work.expression = macro.формула_работы;
 
       
-      if (macro.формула_работы && !work.expression) {
-        work.expression = macro.формула_работы;
-      }
+      const db = await getDb();
+      const linkedMaterials = await db.select(
+        'SELECT * FROM Материалы_макроса WHERE идентификатор_макроса = $1', 
+        [macro.идентификатор]
+      );
 
       
-      if (macro.название_материала) {
-        
-        const hasMaterial = section.materials.some(m => m.name === macro.название_материала);
-        
-        if (!hasMaterial) {
-          
-          const rawFormula = macro.формула_материала || '';
-          const finalFormula = rawFormula.replace(/\[WORK_CODE\]/g, `[${work.code}]`);
-          
+      for (const mData of linkedMaterials) {
+        const hasMat = section.materials.some(m => m.name === mData.название_материала);
+        if (!hasMat) {
+          const finalFormula = mData.формула_материала.replace(/\[WORK_CODE\]/g, `[${work.code}]`);
           const newMat = { 
             code: 'М' + codeCounters.value.mat++, 
-            name: macro.название_материала, 
-            unit: macro.ед_изм_материала || 'шт', 
+            name: mData.название_материала, 
+            unit: mData.ед_изм_материала, 
             expression: finalFormula, 
-            qty: 0, 
-            price: 0 
+            qty: 0, price: 0 
           };
-          
-          updateMaterialPrice(newMat); 
+          updateMaterialPrice(newMat);
           section.materials.push(newMat);
         }
       }
-      
-      
       break; 
     }
   }
-
-  
   recalculateVolumes();
 }
 
@@ -559,6 +549,7 @@ function loadPresetTemplate(presetId) {
   const templates = {
     'tn-krovlya-smart': {
       name: 'Монтаж ТН-КРОВЛЯ Смарт (Профлист + ПВХ)',
+      baseType: 'профлист',
       roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
       sections: [
         {
@@ -591,6 +582,7 @@ function loadPresetTemplate(presetId) {
     },
     'tn-krovlya-classic': {
       name: 'Монтаж ТН-КРОВЛЯ Классик (Бетон + Битум)',
+      baseType: 'жб',
       roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
       sections: [
         {
@@ -626,6 +618,7 @@ function loadPresetTemplate(presetId) {
   estimateZones.value = [{
     id: nextId++,
     name: selectedPreset.name,
+    baseType: selectedPreset.baseType,
     roofParams: { ...selectedPreset.roofParams },
     sections: selectedPreset.sections
   }];
@@ -684,6 +677,9 @@ async function loadProject() {
       estimateZones.value = loadedData.estimateZones || [];
       
       estimateZones.value.forEach(zone => {
+        if (!zone.baseType) {
+          zone.baseType = 'профлист';
+        }
         if (!zone.roofParams) {
           zone.roofParams = { ...fallbackGlobalParams };
         }
@@ -714,6 +710,7 @@ function addZone() {
   estimateZones.value.push({ 
     id: nextId++, 
     name: 'Новый участок (ось)', 
+    baseType: 'профлист',
     roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
     sections: [] 
   }); 
@@ -796,8 +793,8 @@ function printEstimate() { window.print(); }
 .zone-params-block { background: #e9ecef; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; border: 1px solid #ced4da; }
 .zone-params-title { font-weight: bold; margin-bottom: 0.8rem; color: #495057; font-size: 0.95rem; }
 .params-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
-.params-grid input { padding: 0.6rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 1rem; font-weight: bold; background: #fff; }
-.params-grid input:focus { border-color: #0d6efd; outline: none; }
+.params-grid input, .params-grid select { padding: 0.6rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 1rem; font-weight: bold; background: #fff; width: 100%; box-sizing: border-box; }
+.params-grid input:focus, .params-grid select:focus { border-color: #0d6efd; outline: none; }
 
 .section-block { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px dashed #ced4da; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
