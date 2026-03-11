@@ -28,7 +28,6 @@
               <input v-model="newMaterial.артикул_товара" type="text" required />
             </div>
           </div>
-          
           <div class="row-basic">
             <div class="input-group name-group">
               <label>Полное наименование материала *</label>
@@ -58,18 +57,21 @@
 
       <section class="result-card">
         <div class="table-toolbar">
-          <h3>Каталог материалов</h3>
-          <input 
-            v-model="searchMaterial" 
-            placeholder="🔍 Поиск по наименованию, артикулу или категории..." 
-            class="search-input" 
-          />
+          <div class="toolbar-left">
+            <h3>Каталог материалов</h3>
+            <label class="fav-filter" title="Показать только отмеченные материалы">
+              <input type="checkbox" v-model="onlyFavMaterials" /> 
+              ⭐ Только избранное
+            </label>
+          </div>
+          <input v-model="searchMaterial" placeholder="🔍 Поиск по названию или категории..." class="search-input" />
         </div>
 
         <div class="table-scroll">
           <table class="modern-table wide-table resizable-table">
             <thead>
               <tr>
+                <th style="width: 40px; min-width: 40px;">⭐</th>
                 <th :style="{ width: matColWidths.id + 'px', minWidth: matColWidths.id + 'px' }">
                   ID <div class="resizer" @mousedown.stop="startResize($event, 'id', matColWidths)"></div>
                 </th>
@@ -77,7 +79,7 @@
                   Артикул <div class="resizer" @mousedown.stop="startResize($event, 'article', matColWidths)"></div>
                 </th>
                 <th :style="{ width: matColWidths.name + 'px', minWidth: matColWidths.name + 'px' }">
-                  Наименование материала <div class="resizer" @mousedown.stop="startResize($event, 'name', matColWidths)"></div>
+                  Наименование <div class="resizer" @mousedown.stop="startResize($event, 'name', matColWidths)"></div>
                 </th>
                 <th :style="{ width: matColWidths.unit + 'px', minWidth: matColWidths.unit + 'px' }">
                   Ед. изм. <div class="resizer" @mousedown.stop="startResize($event, 'unit', matColWidths)"></div>
@@ -90,25 +92,31 @@
             </thead>
             <tbody>
               <template v-for="(subGroups, mainCat) in groupedMaterials" :key="mainCat">
+                
                 <tr class="group-header mat-main-header" @click="toggleMatMain(mainCat)">
-                  <td colspan="6">
-                    <span class="toggle-icon">{{ collapsedMatMain[mainCat] ? '▶' : '▼' }}</span>
-                    {{ mainCat }}
+                  <td colspan="7">
+                    <span class="toggle-icon">{{ collapsedMatMain[mainCat] ? '▶' : '▼' }}</span> {{ mainCat }}
                   </td>
                 </tr>
 
                 <template v-if="!collapsedMatMain[mainCat]">
                   <template v-for="(items, subCat) in subGroups" :key="mainCat + subCat">
+                    
                     <tr class="group-header mat-sub-header" @click="toggleMatSub(mainCat, subCat)">
-                      <td colspan="6">
-                        <span class="toggle-icon">{{ collapsedMatSub[mainCat + '_' + subCat] ? '▶' : '▼' }}</span>
+                      <td colspan="7">
+                        <span class="toggle-icon">{{ collapsedMatSub[mainCat + '_' + subCat] ? '▶' : '▼' }}</span> 
                         {{ subCat }} <span class="group-count">({{ items.length }} шт)</span>
                       </td>
                     </tr>
 
                     <template v-if="!collapsedMatSub[mainCat + '_' + subCat]">
-                      <tr v-for="mat in items" :key="mat.идентификатор">
-                        <td class="center">{{ mat.идентификатор }}</td>
+                      <tr v-for="mat in items" :key="mat.идентификатор" :class="{ 'is-fav': mat.избранное }">
+                        <td class="center">
+                          <button @click="toggleFavMaterial(mat)" class="btn-fav" :title="mat.избранное ? 'Убрать из избранного' : 'В избранное'">
+                            {{ mat.избранное ? '⭐' : '☆' }}
+                          </button>
+                        </td>
+                        <td class="center text-muted">{{ mat.идентификатор }}</td>
                         <td><input v-model="mat.артикул_товара" @change="updateMaterial(mat)" class="cell-input article" /></td>
                         <td><input v-model="mat.полное_наименование_материала" @change="updateMaterial(mat)" class="cell-input text-left" /></td>
                         <td class="center"><input v-model="mat.единица_измерения" @change="updateMaterial(mat)" class="cell-input center" /></td>
@@ -116,11 +124,13 @@
                         <td class="center"><button @click="deleteMaterial(mat.идентификатор)" class="btn-danger" title="Удалить">🗑️</button></td>
                       </tr>
                     </template>
+
                   </template>
                 </template>
+
               </template>
               <tr v-if="Object.keys(groupedMaterials).length === 0">
-                <td colspan="6" class="center empty-message">По вашему запросу ничего не найдено</td>
+                <td colspan="7" class="center empty-message">По вашему запросу ничего не найдено</td>
               </tr>
             </tbody>
           </table>
@@ -178,60 +188,54 @@
 
       <section class="result-card">
         <div class="table-toolbar">
-          <h3>Список расценок на работы</h3>
-          <input 
-            v-model="searchWork" 
-            placeholder="🔍 Поиск по наименованию или категории..." 
-            class="search-input" 
-          />
+          <div class="toolbar-left">
+            <h3>Список работ</h3>
+            <label class="fav-filter" title="Показать только отмеченные работы">
+              <input type="checkbox" v-model="onlyFavWorks" /> 
+              ⭐ Только избранное
+            </label>
+          </div>
+          <input v-model="searchWork" placeholder="🔍 Поиск по наименованию или категории..." class="search-input" />
         </div>
 
         <div class="table-scroll">
           <table class="modern-table wide-table resizable-table">
             <thead>
               <tr>
+                <th style="width: 40px; min-width: 40px;">⭐</th>
                 <th :style="{ width: workColWidths.name + 'px', minWidth: workColWidths.name + 'px' }">
-                  Наименование работы <div class="resizer" @mousedown.stop="startResize($event, 'name', workColWidths)"></div>
+                  Наименование <div class="resizer" @mousedown.stop="startResize($event, 'name', workColWidths)"></div>
                 </th>
                 <th :style="{ width: workColWidths.unit + 'px', minWidth: workColWidths.unit + 'px' }">
                   Ед. <div class="resizer" @mousedown.stop="startResize($event, 'unit', workColWidths)"></div>
                 </th>
-                <th :style="{ width: workColWidths.p1 + 'px', minWidth: workColWidths.p1 + 'px' }">
-                  0-300 <div class="resizer" @mousedown.stop="startResize($event, 'p1', workColWidths)"></div>
-                </th>
-                <th :style="{ width: workColWidths.p2 + 'px', minWidth: workColWidths.p2 + 'px' }">
-                  300-600 <div class="resizer" @mousedown.stop="startResize($event, 'p2', workColWidths)"></div>
-                </th>
-                <th :style="{ width: workColWidths.p3 + 'px', minWidth: workColWidths.p3 + 'px' }">
-                  600-1k <div class="resizer" @mousedown.stop="startResize($event, 'p3', workColWidths)"></div>
-                </th>
-                <th :style="{ width: workColWidths.p4 + 'px', minWidth: workColWidths.p4 + 'px' }">
-                  1k-3k <div class="resizer" @mousedown.stop="startResize($event, 'p4', workColWidths)"></div>
-                </th>
-                <th :style="{ width: workColWidths.p5 + 'px', minWidth: workColWidths.p5 + 'px' }">
-                  3k-6k <div class="resizer" @mousedown.stop="startResize($event, 'p5', workColWidths)"></div>
-                </th>
-                <th :style="{ width: workColWidths.p6 + 'px', minWidth: workColWidths.p6 + 'px' }">
-                  6k-15k <div class="resizer" @mousedown.stop="startResize($event, 'p6', workColWidths)"></div>
-                </th>
-                <th :style="{ width: workColWidths.p7 + 'px', minWidth: workColWidths.p7 + 'px' }">
-                  15k-30k <div class="resizer" @mousedown.stop="startResize($event, 'p7', workColWidths)"></div>
-                </th>
-                <th :style="{ width: workColWidths.p8 + 'px', minWidth: workColWidths.p8 + 'px' }">
-                  >30k <div class="resizer" @mousedown.stop="startResize($event, 'p8', workColWidths)"></div>
-                </th>
+                <th :style="{ width: workColWidths.p1 + 'px', minWidth: workColWidths.p1 + 'px' }">0-300 <div class="resizer" @mousedown.stop="startResize($event, 'p1', workColWidths)"></div></th>
+                <th :style="{ width: workColWidths.p2 + 'px', minWidth: workColWidths.p2 + 'px' }">300-600 <div class="resizer" @mousedown.stop="startResize($event, 'p2', workColWidths)"></div></th>
+                <th :style="{ width: workColWidths.p3 + 'px', minWidth: workColWidths.p3 + 'px' }">600-1k <div class="resizer" @mousedown.stop="startResize($event, 'p3', workColWidths)"></div></th>
+                <th :style="{ width: workColWidths.p4 + 'px', minWidth: workColWidths.p4 + 'px' }">1k-3k <div class="resizer" @mousedown.stop="startResize($event, 'p4', workColWidths)"></div></th>
+                <th :style="{ width: workColWidths.p5 + 'px', minWidth: workColWidths.p5 + 'px' }">3k-6k <div class="resizer" @mousedown.stop="startResize($event, 'p5', workColWidths)"></div></th>
+                <th :style="{ width: workColWidths.p6 + 'px', minWidth: workColWidths.p6 + 'px' }">6k-15k <div class="resizer" @mousedown.stop="startResize($event, 'p6', workColWidths)"></div></th>
+                <th :style="{ width: workColWidths.p7 + 'px', minWidth: workColWidths.p7 + 'px' }">15k-30k <div class="resizer" @mousedown.stop="startResize($event, 'p7', workColWidths)"></div></th>
+                <th :style="{ width: workColWidths.p8 + 'px', minWidth: workColWidths.p8 + 'px' }">>30k <div class="resizer" @mousedown.stop="startResize($event, 'p8', workColWidths)"></div></th>
                 <th :style="{ width: workColWidths.actions + 'px', minWidth: workColWidths.actions + 'px' }"></th>
               </tr>
             </thead>
             <tbody>
               <template v-for="(group, category) in groupedWorks" :key="category">
+                
                 <tr class="group-header" @click="toggleGroup(category)" title="Нажмите, чтобы свернуть/развернуть">
-                  <td colspan="11">
+                  <td colspan="12">
                     <span class="toggle-icon">{{ collapsedGroups[category] ? '▶' : '▼' }}</span>
                     {{ category }} <span class="group-count">({{ group.length }} позиций)</span>
                   </td>
                 </tr>
-                <tr v-for="work in group" :key="work.идентификатор" v-show="!collapsedGroups[category]">
+                
+                <tr v-for="work in group" :key="work.идентификатор" v-show="!collapsedGroups[category]" :class="{ 'is-fav': work.избранное }">
+                  <td class="center">
+                    <button @click="toggleFavWork(work)" class="btn-fav" :title="work.избранное ? 'Убрать из избранного' : 'В избранное'">
+                      {{ work.избранное ? '⭐' : '☆' }}
+                    </button>
+                  </td>
                   <td><input v-model="work.наименование_работы" @change="updateWork(work)" class="cell-input text-left work-name" /></td>
                   <td class="center"><input v-model="work.единица_измерения_работы" @change="updateWork(work)" class="cell-input center" /></td>
                   <td><input type="number" v-model.number="work.цена_0_300" @change="updateWork(work)" class="cell-input right" step="0.01" /></td>
@@ -246,9 +250,10 @@
                     <button @click="deleteWork(work.идентификатор)" class="btn-danger" title="Удалить">🗑️</button>
                   </td>
                 </tr>
+
               </template>
               <tr v-if="Object.keys(groupedWorks).length === 0">
-                <td colspan="11" class="center empty-message">По вашему запросу ничего не найдено</td>
+                <td colspan="12" class="center empty-message">По вашему запросу ничего не найдено</td>
               </tr>
             </tbody>
           </table>
@@ -266,8 +271,12 @@ const activeTab = ref('materials');
 const materials = ref([]);
 const works = ref([]);
 
+
 const searchMaterial = ref('');
 const searchWork = ref('');
+const onlyFavMaterials = ref(false); 
+const onlyFavWorks = ref(false); 
+
 
 const collapsedGroups = ref({});
 const collapsedMatMain = ref({});
@@ -287,7 +296,7 @@ const newWork = ref({
 
 
 
-const matColWidths = reactive({ id: 60, article: 150, name: 500, unit: 100, price: 120, actions: 60 });
+const matColWidths = reactive({ id: 60, article: 150, name: 400, unit: 100, price: 120, actions: 60 });
 const workColWidths = reactive({ name: 300, unit: 70, p1: 90, p2: 90, p3: 90, p4: 90, p5: 90, p6: 90, p7: 90, p8: 90, actions: 60 });
 
 let isResizing = false;
@@ -301,7 +310,6 @@ function startResize(e, headerKey, colWidthsObj) {
   startX = e.clientX;
   startWidth = colWidthsObj[headerKey];
   
-  
   document.body.style.userSelect = 'none';
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('mouseup', onMouseUp);
@@ -310,7 +318,6 @@ function startResize(e, headerKey, colWidthsObj) {
 function onMouseMove(e) {
   if (!isResizing) return;
   const deltaX = e.clientX - startX;
-  
   currentHeader.obj[currentHeader.key] = Math.max(50, startWidth + deltaX);
 }
 
@@ -325,10 +332,33 @@ function onMouseUp() {
 
 
 
+async function toggleFavMaterial(mat) {
+  mat.избранное = mat.избранное ? 0 : 1;
+  try {
+    const db = await getDb();
+    await db.execute("UPDATE Справочник_материалов SET избранное = $1 WHERE идентификатор = $2", [mat.избранное, mat.идентификатор]);
+  } catch(e) { console.error('Ошибка сохранения избранного', e); }
+}
+
+async function toggleFavWork(work) {
+  work.избранное = work.избранное ? 0 : 1;
+  try {
+    const db = await getDb();
+    await db.execute("UPDATE Справочник_видов_работ SET избранное = $1 WHERE идентификатор = $2", [work.избранное, work.идентификатор]);
+  } catch(e) { console.error('Ошибка сохранения избранного', e); }
+}
+
+
+
+
 const filteredWorks = computed(() => {
-  if (!searchWork.value) return works.value;
+  let list = works.value;
+  if (onlyFavWorks.value) {
+    list = list.filter(w => w.избранное);
+  }
+  if (!searchWork.value) return list;
   const query = searchWork.value.toLowerCase();
-  return works.value.filter(w => 
+  return list.filter(w => 
     (w.наименование_работы && w.наименование_работы.toLowerCase().includes(query)) ||
     (w.категория_работы && w.категория_работы.toLowerCase().includes(query))
   );
@@ -353,8 +383,8 @@ function toggleGroup(category) {
   collapsedGroups.value[category] = !collapsedGroups.value[category];
 }
 
-watch(searchWork, (newVal) => {
-  if (newVal.trim().length > 0) {
+watch([searchWork, onlyFavWorks], () => {
+  if (searchWork.value.trim().length > 0 || onlyFavWorks.value) {
     for (const cat in groupedWorks.value) collapsedGroups.value[cat] = false;
   }
 });
@@ -363,9 +393,13 @@ watch(searchWork, (newVal) => {
 
 
 const filteredMaterials = computed(() => {
-  if (!searchMaterial.value) return materials.value;
+  let list = materials.value;
+  if (onlyFavMaterials.value) {
+    list = list.filter(m => m.избранное);
+  }
+  if (!searchMaterial.value) return list;
   const query = searchMaterial.value.toLowerCase();
-  return materials.value.filter(m => 
+  return list.filter(m => 
     (m.полное_наименование_материала && m.полное_наименование_материала.toLowerCase().includes(query)) ||
     (m.артикул_товара && String(m.артикул_товара).toLowerCase().includes(query)) ||
     (m.главная_категория && m.главная_категория.toLowerCase().includes(query)) ||
@@ -393,8 +427,8 @@ function toggleMatSub(mainCat, subCat) {
   collapsedMatSub.value[key] = !collapsedMatSub.value[key];
 }
 
-watch(searchMaterial, (newVal) => {
-  if (newVal.trim().length > 0) {
+watch([searchMaterial, onlyFavMaterials], () => {
+  if (searchMaterial.value.trim().length > 0 || onlyFavMaterials.value) {
     for (const mainCat in groupedMaterials.value) {
       collapsedMatMain.value[mainCat] = false;
       for (const subCat in groupedMaterials.value[mainCat]) {
@@ -409,17 +443,22 @@ watch(searchMaterial, (newVal) => {
 
 async function loadData() {
   const db = await getDb();
-  materials.value = await db.select('SELECT * FROM Справочник_материалов ORDER BY главная_категория, подкатегория, полное_наименование_материала ASC');
-  works.value = await db.select('SELECT * FROM Справочник_видов_работ ORDER BY идентификатор ASC');
   
-  for (const mainCat in groupedMaterials.value) {
-    collapsedMatMain.value[mainCat] = true;
-    for (const subCat in groupedMaterials.value[mainCat]) {
-      collapsedMatSub.value[`${mainCat}_${subCat}`] = true;
+  materials.value = await db.select('SELECT * FROM Справочник_материалов ORDER BY избранное DESC, главная_категория, подкатегория, полное_наименование_материала ASC');
+  works.value = await db.select('SELECT * FROM Справочник_видов_работ ORDER BY избранное DESC, идентификатор ASC');
+  
+  if (!searchMaterial.value && !onlyFavMaterials.value) {
+    for (const mainCat in groupedMaterials.value) {
+      collapsedMatMain.value[mainCat] = true;
+      for (const subCat in groupedMaterials.value[mainCat]) {
+        collapsedMatSub.value[`${mainCat}_${subCat}`] = true;
+      }
     }
   }
-  for (const cat in groupedWorks.value) {
-    collapsedGroups.value[cat] = true;
+  if (!searchWork.value && !onlyFavWorks.value) {
+    for (const cat in groupedWorks.value) {
+      collapsedGroups.value[cat] = true;
+    }
   }
 }
 
@@ -430,7 +469,7 @@ async function addMaterial() {
   try {
     const db = await getDb();
     await db.execute(
-      `INSERT INTO Справочник_материалов (главная_категория, подкатегория, артикул_товара, полное_наименование_материала, единица_измерения, базовая_цена) VALUES ($1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO Справочник_материалов (главная_категория, подкатегория, артикул_товара, полное_наименование_материала, единица_измерения, базовая_цена, избранное) VALUES ($1, $2, $3, $4, $5, $6, 0)`,
       [newMaterial.value.главная_категория || 'Без категории', newMaterial.value.подкатегория || 'Без подкатегории', newMaterial.value.артикул_товара, newMaterial.value.полное_наименование_материала, newMaterial.value.единица_измерения, newMaterial.value.базовая_цена || 0]
     );
     collapsedMatMain.value[newMaterial.value.главная_категория || 'Без категории'] = false;
@@ -444,7 +483,7 @@ async function addWork() {
   try {
     const db = await getDb();
     await db.execute(
-      `INSERT INTO Справочник_видов_работ (категория_работы, наименование_работы, единица_измерения_работы, цена_0_300, цена_300_600, цена_600_1000, цена_1000_3000, цена_3000_6000, цена_6000_15000, цена_15000_30000, цена_более_30000) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      `INSERT INTO Справочник_видов_работ (категория_работы, наименование_работы, единица_измерения_работы, цена_0_300, цена_300_600, цена_600_1000, цена_1000_3000, цена_3000_6000, цена_6000_15000, цена_15000_30000, цена_более_30000, избранное) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0)`,
       [newWork.value.категория_работы || 'Общие работы', newWork.value.наименование_работы, newWork.value.единица_измерения_работы, newWork.value.цена_0_300 || 0, newWork.value.цена_300_600 || 0, newWork.value.цена_600_1000 || 0, newWork.value.цена_1000_3000 || 0, newWork.value.цена_3000_6000 || 0, newWork.value.цена_6000_15000 || 0, newWork.value.цена_15000_30000 || 0, newWork.value.цена_более_30000 || 0]
     );
     collapsedGroups.value[newWork.value.категория_работы] = false;
@@ -488,12 +527,33 @@ onMounted(() => loadData());
   align-items: center;
   margin-bottom: 1.2rem;
 }
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
 .table-toolbar h3 {
   margin: 0;
   color: #333;
 }
+.fav-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: bold;
+  color: #d97706;
+  cursor: pointer;
+  user-select: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  transition: background 0.2s;
+}
+.fav-filter:hover { background: #fef3c7; }
+
 .search-input {
-  width: 450px;
+  width: 350px;
   padding: 0.6rem 1rem;
   border: 1px solid #ced4da;
   border-radius: 6px;
@@ -511,6 +571,17 @@ onMounted(() => loadData());
   font-style: italic;
   font-size: 1rem;
 }
+
+
+.btn-fav {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.btn-fav:hover { transform: scale(1.2); }
+.is-fav { background-color: #fffbeb !important; }
 
 
 .group-header {
@@ -595,7 +666,7 @@ onMounted(() => loadData());
   font-size: 0.85rem; 
   text-align: center; 
   border-bottom: 2px solid #ddd; 
-  border-right: 1px solid #ddd; 
+  border-right: 1px solid #ddd;
   white-space: nowrap; 
 }
 .modern-table td { padding: 0; border-bottom: 1px solid #edf2f7; font-size: 0.9rem; border-right: 1px solid #f1f5f9; }
@@ -613,11 +684,12 @@ onMounted(() => loadData());
   z-index: 10;
 }
 .resizer:hover, .resizer:active {
-  background-color: #3b82f6; 
+  background-color: #3b82f6;
 }
 
 .article { font-family: monospace; font-weight: bold; color: #2e7d32; }
 .center { text-align: center; }
 .right { text-align: right; }
 .bold { font-weight: bold; }
+.text-muted { color: #888; }
 </style>
