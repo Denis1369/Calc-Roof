@@ -33,3 +33,5 @@ Thumbs.db
 *.suo
 *.sln
 .venv
+
+Cargo.toml
