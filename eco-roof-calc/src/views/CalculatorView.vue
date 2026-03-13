@@ -7,9 +7,13 @@
 
     <section class="controls-panel hide-on-print">
       <div class="db-controls-row">
-        <div class="input-group">
+        <div class="calc-group" style="flex: 3;">
           <label>Название проекта (для сохранения):</label>
           <input v-model="projectName" placeholder="Например: ТЦ Галактика, кровля" class="project-name-input" />
+        </div>
+        <div class="calc-group" style="flex: 1; max-width: 150px;">
+          <label>НДС (%):</label>
+          <input type="number" v-model.number="vatRate" min="0" max="100" />
         </div>
         <div class="action-buttons">
           <button @click="saveProject" class="btn-success">💾 Сохранить</button>
@@ -39,31 +43,23 @@
         <div class="zone-params-block hide-on-print">
           <div class="zone-params-title">Ввод параметров для этого участка (для формул):</div>
           <div class="params-grid">
-            <div class="input-group">
-              <label>Тип основания</label>
-              <select v-model="zone.baseType" class="type-select">
-                <option value="профлист">По профлисту</option>
-                <option value="жб">По ж/б (бетону)</option>
-              </select>
-            </div>
-            
-            <div class="input-group">
+            <div class="calc-group">
               <label>Площадь (S, м²)</label>
               <input type="number" v-model.number="zone.roofParams.area" @input="recalculateVolumes" placeholder="0" min="0" step="0.1" />
             </div>
-            <div class="input-group">
+            <div class="calc-group">
               <label>Периметр (P, пог.м)</label>
               <input type="number" v-model.number="zone.roofParams.perimeter" @input="recalculateVolumes" placeholder="0" min="0" step="0.1" />
             </div>
-            <div class="input-group">
+            <div class="calc-group">
               <label>Водоотвод парапет. (шт)</label>
               <input type="number" v-model.number="zone.roofParams.parapetDrains" @input="recalculateVolumes" placeholder="0" min="0" />
             </div>
-            <div class="input-group">
+            <div class="calc-group">
               <label>Воронки (ID, шт)</label>
               <input type="number" v-model.number="zone.roofParams.innerDrains" @input="recalculateVolumes" placeholder="0" min="0" />
             </div>
-            <div class="input-group">
+            <div class="calc-group">
               <label>Аэраторы (A, шт)</label>
               <input type="number" v-model.number="zone.roofParams.aerators" @input="recalculateVolumes" placeholder="0" min="0" />
             </div>
@@ -79,7 +75,7 @@
           <div class="works-group mt-3">
             <div class="table-subtitle">Работы:</div>
             <div v-if="section.works.length > 0" class="table-wrapper">
-              <table class="data-table">
+              <table class="data-table works-table">
                 <thead>
                   <tr>
                     <th class="col-code">Код</th>
@@ -133,11 +129,12 @@
           <div class="materials-group mt-3">
             <div class="table-subtitle">Материалы:</div>
             <div v-if="section.materials.length > 0" class="table-wrapper">
-              <table class="data-table">
+              <table class="data-table mat-table">
                 <thead>
                   <tr>
                     <th class="col-code">Код</th>
                     <th class="col-name">Наименование материалов</th>
+                    <th class="col-supplier">Тип / Поставщик</th>
                     <th class="col-unit">Ед.изм.</th>
                     <th class="col-formula">Формула расчета</th>
                     <th class="col-qty">Кол-во</th>
@@ -157,6 +154,12 @@
                         class="cell-input text-left" 
                         placeholder="Начните вводить для поиска..." 
                       />
+                    </td>
+                    <td class="center">
+                      <select v-model="mat.supplier" class="cell-input center supplier-select">
+                        <option value="ТехноНИКОЛЬ">ТехноНИКОЛЬ</option>
+                        <option value="Аналог">Аналог</option>
+                      </select>
                     </td>
                     <td class="center"><input v-model="mat.unit" class="cell-input center" /></td>
                     <td>
@@ -197,26 +200,46 @@
       </div>
 
       <div class="add-zone-row hide-on-print">
-        <button @click="addZone" class="btn-primary btn-large">+ Добавить новый участок (ось)</button>
+        <button @click="addZone" class="btn-primary btn-large">+ Добавить пустой участок</button>
+        
+        <div class="custom-dropdown" ref="dropdownRef">
+          <button class="dropdown-toggle" @click="isTemplateDropdownOpen = !isTemplateDropdownOpen">
+            <span>Или выберите готовую систему...</span>
+            <span class="arrow" :class="{ 'arrow-up': isTemplateDropdownOpen }">▼</span>
+          </button>
+          
+          <transition name="fade">
+            <div class="dropdown-menu" v-if="isTemplateDropdownOpen">
+              <div v-if="savedTemplatesDb.length === 0" class="dropdown-empty">
+                Шаблоны не найдены
+              </div>
+              <div 
+                v-for="t in savedTemplatesDb" 
+                :key="t.идентификатор" 
+                class="dropdown-item"
+                @click="selectTemplate(t.идентификатор)"
+              >
+                <span class="item-icon">📋</span>
+                <span class="item-text">{{ t.название }}</span>
+              </div>
+            </div>
+          </transition>
+        </div>
       </div>
 
       <section class="grand-totals">
         <div class="summary-line">
-          <span>ИТОГО по Разделам монтажные работы:</span>
+          <span>Сумма по разделам (Монтажные работы):</span>
           <span class="bold">{{ grandTotalWorks.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
         </div>
         <div class="summary-line">
-          <span>ИТОГО по Разделам материалы:</span>
+          <span>Сумма по разделам (Материалы):</span>
           <span class="bold">{{ grandTotalMaterials.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
-        </div>
-        <div class="summary-line highlight-line">
-          <span>Общая сумма по разделам:</span>
-          <span class="bold">{{ (grandTotalWorks + grandTotalMaterials).toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
         </div>
 
         <div class="expenses-block mt-4">
           <h3 class="expenses-title">Накладные, транспортные, организационные и утилизационные расходы:</h3>
-          <table class="data-table">
+          <table class="data-table works-table">
             <tbody>
               <tr v-for="(exp, eIdx) in overheadExpenses" :key="eIdx">
                 <td><input v-model="exp.name" class="cell-input text-left" placeholder="Название расхода" /></td>
@@ -231,15 +254,26 @@
           <button @click="addExpense" class="btn-text hide-on-print mt-2">+ Добавить накладной расход</button>
           
           <div class="subtotal-row mt-2">
-            <span class="subtotal-label">ИТОГО накладные расходы:</span>
+            <span class="subtotal-label">Сумма накладных расходов:</span>
             <span class="subtotal-value">{{ totalExpenses.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
           </div>
         </div>
 
-        <div class="final-grand-total">
-          <span>Итого общая сумма по всем разделам (с НДС-20%):</span>
-          <span>{{ finalGrandTotal.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
+        <div class="totals-summary-block">
+          <div class="summary-line highlight-line">
+            <span>ИТОГО БЕЗ НДС:</span>
+            <span class="bold">{{ subTotalWithoutVat.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
+          </div>
+          <div class="summary-line text-muted">
+            <span>В том числе НДС ({{ vatRate }}%):</span>
+            <span>{{ vatAmount.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
+          </div>
+          <div class="final-grand-total">
+            <span>ВСЕГО К ОПЛАТЕ (С НДС):</span>
+            <span>{{ finalGrandTotalWithVat.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
+          </div>
         </div>
+
       </section>
     </div>
 
@@ -257,20 +291,22 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router'; 
 import { getDb } from '../database.js';
 import { evaluate } from 'mathjs';
 
 const route = useRoute(); 
 const projectName = ref('');
-
+const vatRate = ref(22); 
 
 const worksDb = ref([]);
 const materialsDb = ref([]);
 const formulasDb = ref([]);
 const coefficientsDb = ref([]);
 const macrosDb = ref([]); 
+const savedTemplatesDb = ref([]);
 
 const estimateZones = ref([]);
 
@@ -285,6 +321,21 @@ const codeCounters = ref({ work: 1, mat: 1 });
 
 
 
+const isTemplateDropdownOpen = ref(false);
+const dropdownRef = ref(null);
+
+
+const closeDropdown = (e) => {
+  if (dropdownRef.value && !dropdownRef.value.contains(e.target)) {
+    isTemplateDropdownOpen.value = false;
+  }
+};
+
+const selectTemplate = (id) => {
+  addZoneFromTemplate(id);
+  isTemplateDropdownOpen.value = false; 
+};
+
 const globalRoofParams = computed(() => {
   return estimateZones.value.reduce((acc, zone) => {
     acc.area += (zone.roofParams?.area || 0);
@@ -296,10 +347,10 @@ const globalRoofParams = computed(() => {
   }, { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 });
 });
 
-
-
-
 onMounted(async () => {
+  
+  document.addEventListener('click', closeDropdown);
+
   try {
     const db = await getDb();
     worksDb.value = await db.select('SELECT * FROM Справочник_видов_работ');
@@ -307,35 +358,31 @@ onMounted(async () => {
     formulasDb.value = await db.select('SELECT * FROM Справочник_формул');
     coefficientsDb.value = await db.select('SELECT * FROM Справочник_коэффициентов');
     
-    try {
-      macrosDb.value = await db.select('SELECT * FROM Справочник_макросов');
-    } catch (e) {
-      console.warn('Таблица Справочник_макросов не найдена или пуста.', e);
-    }
+    try { macrosDb.value = await db.select('SELECT * FROM Справочник_макросов'); } catch (e) {}
+    try { savedTemplatesDb.value = await db.select('SELECT * FROM Справочник_шаблонов'); } catch(e) {}
 
+    const presetId = route.query.preset;
+    if (presetId) {
+      await addZoneFromTemplate(presetId);
+    } else if (estimateZones.value.length === 0) {
+      addZone(); 
+    }
   } catch (error) {
     console.error('Ошибка при загрузке баз данных:', error);
   }
-
-  if (route.query.preset) {
-    loadPresetTemplate(route.query.preset);
-  } else if (estimateZones.value.length === 0) {
-    addZone(); 
-  }
 });
 
-
-
+onUnmounted(() => {
+  document.removeEventListener('click', closeDropdown);
+});
 
 function updateWorkPrice(work) {
   if (!work.name) return;
   const dbItem = worksDb.value.find(w => w.наименование_работы === work.name);
   if (dbItem) {
     work.unit = dbItem.единица_измерения_работы;
-    
     let qty = work.qty || 0;
     let p = dbItem.цена_0_300;
-    
     if (qty > 300) p = dbItem.цена_300_600;
     if (qty > 600) p = dbItem.цена_600_1000;
     if (qty > 1000) p = dbItem.цена_1000_3000;
@@ -343,7 +390,6 @@ function updateWorkPrice(work) {
     if (qty > 6000) p = dbItem.цена_6000_15000;
     if (qty > 15000) p = dbItem.цена_15000_30000;
     if (qty > 30000) p = dbItem.цена_более_30000;
-    
     work.price = p; 
   }
 }
@@ -357,43 +403,47 @@ function updateMaterialPrice(mat) {
   }
 }
 
-
 async function onWorkNameChange(work, section) {
   updateWorkPrice(work);
   if (!work.name) return;
   const nameLower = work.name.toLowerCase();
 
   for (const macro of macrosDb.value) {
+    if (!macro.условие) continue;
     const keywords = macro.условие.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
     if (keywords.every(kw => nameLower.includes(kw))) {
       
-      
-      if (macro.название_работы) work.name = macro.название_работы;
-      if (macro.формула_работы) work.expression = macro.формула_работы;
-
-      
-      const db = await getDb();
-      const linkedMaterials = await db.select(
-        'SELECT * FROM Материалы_макроса WHERE идентификатор_макроса = $1', 
-        [macro.идентификатор]
-      );
-
-      
-      for (const mData of linkedMaterials) {
-        const hasMat = section.materials.some(m => m.name === mData.название_материала);
-        if (!hasMat) {
-          const finalFormula = mData.формула_материала.replace(/\[WORK_CODE\]/g, `[${work.code}]`);
-          const newMat = { 
-            code: 'М' + codeCounters.value.mat++, 
-            name: mData.название_материала, 
-            unit: mData.ед_изм_материала, 
-            expression: finalFormula, 
-            qty: 0, price: 0 
-          };
-          updateMaterialPrice(newMat);
-          section.materials.push(newMat);
-        }
+      if (macro.название_работы && work.name !== macro.название_работы) {
+        work.name = macro.название_работы;
+        updateWorkPrice(work); 
       }
+      if (macro.формула_работы && !work.expression) {
+        work.expression = macro.формула_работы;
+      }
+
+      const db = await getDb();
+      try {
+        const linkedMaterials = await db.select(
+          'SELECT * FROM Материалы_макроса WHERE идентификатор_макроса = $1', 
+          [macro.идентификатор]
+        );
+        for (const mData of linkedMaterials) {
+          const hasMat = section.materials.some(m => m.name === mData.название_материала);
+          if (!hasMat) {
+            const finalFormula = mData.формула_материала.replace(/\[WORK_CODE\]/g, `[${work.code}]`);
+            const newMat = { 
+              code: 'М' + codeCounters.value.mat++, 
+              name: mData.название_материала, 
+              supplier: 'ТехноНИКОЛЬ',
+              unit: mData.ед_изм_материала, 
+              expression: finalFormula, 
+              qty: 0, price: 0 
+            };
+            updateMaterialPrice(newMat);
+            section.materials.push(newMat);
+          }
+        }
+      } catch (e) {}
       break; 
     }
   }
@@ -415,13 +465,9 @@ function applyFormula(item) {
   recalculateVolumes();
 }
 
-
-
-
 function assignMissingCodes() {
   let maxWork = 0;
   let maxMat = 0;
-  
   estimateZones.value.forEach(zone => {
     zone.sections.forEach(sec => {
       sec.works.forEach(w => {
@@ -445,13 +491,13 @@ function assignMissingCodes() {
   estimateZones.value.forEach(zone => {
     zone.sections.forEach(sec => {
       sec.works.forEach(w => { if (!w.code) w.code = 'Р' + codeCounters.value.work++; });
-      sec.materials.forEach(m => { if (!m.code) m.code = 'М' + codeCounters.value.mat++; });
+      sec.materials.forEach(m => { 
+        if (!m.code) m.code = 'М' + codeCounters.value.mat++; 
+        if (!m.supplier) m.supplier = 'ТехноНИКОЛЬ'; 
+      });
     });
   });
 }
-
-
-
 
 function parseAndEvaluate(expr, itemsMap, currentCode, currentName, zoneParams) {
   if (!expr && expr !== 0) return 0;
@@ -461,30 +507,19 @@ function parseAndEvaluate(expr, itemsMap, currentCode, currentName, zoneParams) 
   try {
     let parsedExpr = exprStr.replace(/\[(.*?)\]/g, (match, paramName) => {
       let cleanName = paramName.trim();
-      
       const codeMatch = cleanName.match(/^([pPрРmMмМ])(\d+)$/);
       if (codeMatch) {
         const letter = codeMatch[1];
         const num = codeMatch[2];
-
-        if (['p', 'P', 'р', 'Р'].includes(letter)) {
-          cleanName = 'Р' + num;
-        } 
-        else if (['m', 'M', 'м', 'М'].includes(letter)) {
-          cleanName = 'М' + num;
-        }
+        if (['p', 'P', 'р', 'Р'].includes(letter)) cleanName = 'Р' + num;
+        else if (['m', 'M', 'м', 'М'].includes(letter)) cleanName = 'М' + num;
       }
-
-      if (cleanName === currentCode || (currentName && cleanName === currentName.trim())) {
-        return 1; 
-      }
+      if (cleanName === currentCode || (currentName && cleanName === currentName.trim())) return 1; 
 
       const coef = coefficientsDb.value.find(c => c.название === cleanName);
       if (coef) return coef.значение;
 
-      if (itemsMap && itemsMap[cleanName] !== undefined) {
-        return itemsMap[cleanName];
-      }
+      if (itemsMap && itemsMap[cleanName] !== undefined) return itemsMap[cleanName];
 
       return 1;
     });
@@ -507,7 +542,6 @@ function recalculateVolumes() {
   assignMissingCodes();
 
   const itemsMap = {};
-  
   for (let pass = 0; pass < 3; pass++) {
     estimateZones.value.forEach(zone => {
       if (!zone.roofParams) {
@@ -520,109 +554,95 @@ function recalculateVolumes() {
           let val = parseAndEvaluate(work.expression, itemsMap, work.code, work.name, zParams);
           if (work.code) itemsMap[work.code] = val;
           if (work.name) itemsMap[work.name.trim()] = val;
-          
-          if (pass === 2) {
-            work.qty = val;
-            updateWorkPrice(work);
-          }
+          if (pass === 2) { work.qty = val; updateWorkPrice(work); }
         });
         
         section.materials.forEach(mat => {
           let val = parseAndEvaluate(mat.expression, itemsMap, mat.code, mat.name, zParams);
           if (mat.code) itemsMap[mat.code] = val;
           if (mat.name) itemsMap[mat.name.trim()] = val;
-          
-          if (pass === 2) {
-            mat.qty = val;
-          }
+          if (pass === 2) mat.qty = val;
         });
-        
       });
     });
   }
 }
 
+async function saveProject() {
+  if (!projectName.value) { alert('Пожалуйста, укажите название проекта перед сохранением!'); return; }
+  try {
+    const db = await getDb();
+    const projectSnapshot = {
+      vatRate: vatRate.value, 
+      estimateZones: estimateZones.value,
+      overheadExpenses: overheadExpenses.value
+    };
+    const jsonString = JSON.stringify(projectSnapshot);
+    await db.execute('INSERT INTO Сохраненные_сметы (название_объекта, данные_сметы_json) VALUES ($1, $2)', [projectName.value, jsonString]);
+    alert('Смета успешно сохранена в базу данных!');
+  } catch (error) { console.error('Ошибка сохранения:', error); }
+}
 
-
-
-function loadPresetTemplate(presetId) {
-  const templates = {
-    'tn-krovlya-smart': {
-      name: 'Монтаж ТН-КРОВЛЯ Смарт (Профлист + ПВХ)',
-      baseType: 'профлист',
-      roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
-      sections: [
-        {
-          id: nextId++, title: '1. Устройство пароизоляции',
-          works: [ { name: 'Укладка пароизоляционной пленки (плоскость)', unit: 'м2', expression: 'S', qty: 0, price: 0 } ],
-          materials: [ { name: 'Паробарьер С (А500 или С1000)', unit: 'м2', expression: 'S * 1.1', qty: 0, price: 0 } ]
-        },
-        {
-          id: nextId++, title: '2. Устройство теплоизоляции',
-          works: [ { name: 'Монтаж плит утеплителя в 2 слоя', unit: 'м2', expression: 'S', qty: 0, price: 0 } ],
-          materials: [ 
-            { name: 'Утеплитель ТЕХНОРУФ Н Проф (нижний слой, 100мм)', unit: 'м3', expression: 'S * 0.105', qty: 0, price: 0 },
-            { name: 'Утеплитель ТЕХНОРУФ В Оптима (верхний слой, 50мм)', unit: 'м3', expression: 'S * 0.052', qty: 0, price: 0 }
-          ]
-        },
-        {
-          id: nextId++, title: '3. Устройство гидроизоляции',
-          works: [ 
-            { name: 'Монтаж ПВХ мембраны с механическим креплением', unit: 'м2', expression: 'S', qty: 0, price: 0 },
-            { name: 'Монтаж примыканий ПВХ мембраны к парапету', unit: 'м/п', expression: 'P', qty: 0, price: 0 },
-            { name: 'Установка аэраторов', unit: 'шт', expression: 'A', qty: 0, price: 0 }
-          ],
-          materials: [ 
-            { name: 'Мембрана полимерная LOGICROOF V-RP 1.5мм', unit: 'м2', expression: 'S * 1.15', qty: 0, price: 0 },
-            { name: 'Телескопический крепеж ТехноНИКОЛЬ', unit: 'шт', expression: 'S * 5', qty: 0, price: 0 },
-            { name: 'Аэратор кровельный', unit: 'шт', expression: 'A', qty: 0, price: 0 }
-          ]
-        }
-      ]
-    },
-    'tn-krovlya-classic': {
-      name: 'Монтаж ТН-КРОВЛЯ Классик (Бетон + Битум)',
-      baseType: 'жб',
-      roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
-      sections: [
-        {
-          id: nextId++, title: '1. Подготовка основания и пароизоляция',
-          works: [ 
-            { name: 'Огрунтовка праймером', unit: 'м2', expression: 'S', qty: 0, price: 0 },
-            { name: 'Наплавление пароизоляции', unit: 'м2', expression: 'S', qty: 0, price: 0 }
-          ],
-          materials: [ 
-            { name: 'Праймер битумный ТЕХНОНИКОЛЬ №01', unit: 'л', expression: 'S * 0.35', qty: 0, price: 0 }, 
-            { name: 'Биполь ЭПП (пароизоляция)', unit: 'м2', expression: 'S * 1.1', qty: 0, price: 0 }
-          ]
-        },
-        {
-          id: nextId++, title: '2. Гидроизоляция',
-          works: [ 
-            { name: 'Наплавление рулонной гидроизоляции в 2 слоя', unit: 'м2', expression: 'S', qty: 0, price: 0 },
-            { name: 'Установка воронок', unit: 'шт', expression: 'ID', qty: 0, price: 0 }
-          ],
-          materials: [ 
-            { name: 'Унифлекс ЭПП (нижний слой)', unit: 'м2', expression: 'S * 1.15', qty: 0, price: 0 },
-            { name: 'Техноэласт ЭКП (верхний слой с посыпкой)', unit: 'м2', expression: 'S * 1.15', qty: 0, price: 0 },
-            { name: 'Воронка внутреннего водостока', unit: 'шт', expression: 'ID', qty: 0, price: 0 }
-          ]
-        }
-      ]
+async function loadProject() {
+  const projectId = prompt('Введите ID сохраненной сметы (например, 1):');
+  if (!projectId) return;
+  try {
+    const db = await getDb();
+    const result = await db.select('SELECT данные_сметы_json, название_объекта FROM Сохраненные_сметы WHERE идентификатор = $1', [Number(projectId)]);
+    if (result.length > 0) {
+      const loadedData = JSON.parse(result[0].данные_сметы_json);
+      
+      vatRate.value = loadedData.vatRate !== undefined ? loadedData.vatRate : 22; 
+      
+      const fallbackGlobalParams = loadedData.roofParams || { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 };
+      estimateZones.value = loadedData.estimateZones || [];
+      estimateZones.value.forEach(zone => {
+        if (!zone.roofParams) zone.roofParams = { ...fallbackGlobalParams };
+        zone.sections.forEach(sec => {
+          sec.works.forEach(w => { if (w.expression === undefined) w.expression = w.qty; });
+          sec.materials.forEach(m => { 
+            if (m.expression === undefined) m.expression = m.qty; 
+            if (!m.supplier) m.supplier = 'ТехноНИКОЛЬ'; 
+          });
+        });
+      });
+      overheadExpenses.value = loadedData.overheadExpenses || [];
+      projectName.value = result[0].название_объекта;
+      recalculateVolumes(); 
+      alert(`Смета "${projectName.value}" успешно загружена!`);
+    } else {
+      alert('Смета с таким ID не найдена в базе.');
     }
-  };
+  } catch (error) { console.error('Ошибка загрузки:', error); }
+}
 
-  const selectedPreset = templates[presetId] || templates['tn-krovlya-smart']; 
+function addZone() { 
+  estimateZones.value.push({ 
+    id: nextId++, 
+    name: 'Новый участок (ось)', 
+    roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
+    sections: [] 
+  }); 
+}
+
+async function addZoneFromTemplate(templateId) {
+  const tmpl = savedTemplatesDb.value.find(t => t.идентификатор === Number(templateId));
+  if (!tmpl) return;
+
+  const parsedSections = JSON.parse(tmpl.данные_json || '[]');
   
-  projectName.value = `Проект: ${selectedPreset.name}`;
-  estimateZones.value = [{
+  estimateZones.value.push({
     id: nextId++,
-    name: selectedPreset.name,
-    baseType: selectedPreset.baseType,
-    roofParams: { ...selectedPreset.roofParams },
-    sections: selectedPreset.sections
-  }];
-  
+    name: `Монтаж системы: ${tmpl.название}`,
+    roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
+    sections: parsedSections.map(sec => ({
+      ...sec,
+      id: nextId++,
+      works: sec.works.map(w => ({ ...w, code: 'Р' + codeCounters.value.work++, qty: 0, price: 0 })),
+      materials: sec.materials.map(m => ({ ...m, code: 'М' + codeCounters.value.mat++, supplier: 'ТехноНИКОЛЬ', qty: 0, price: 0 }))
+    }))
+  });
+
   setTimeout(() => {
     estimateZones.value.forEach(zone => {
       zone.sections.forEach(sec => {
@@ -630,105 +650,17 @@ function loadPresetTemplate(presetId) {
         sec.materials.forEach(m => updateMaterialPrice(m));
       });
     });
-  }, 300);
-
-  recalculateVolumes();
+    recalculateVolumes();
+  }, 100);
 }
 
-async function saveProject() {
-  if (!projectName.value) {
-    alert('Пожалуйста, укажите название проекта перед сохранением!');
-    return;
-  }
-  try {
-    const db = await getDb();
-    const projectSnapshot = {
-      estimateZones: estimateZones.value,
-      overheadExpenses: overheadExpenses.value
-    };
-    const jsonString = JSON.stringify(projectSnapshot);
-    
-    await db.execute(
-      'INSERT INTO Сохраненные_сметы (название_объекта, данные_сметы_json) VALUES ($1, $2)',
-      [projectName.value, jsonString]
-    );
-    alert('Смета успешно сохранена в базу данных!');
-  } catch (error) {
-    console.error('Ошибка сохранения:', error);
-  }
-}
-
-async function loadProject() {
-  const projectId = prompt('Введите ID сохраненной сметы (например, 1):');
-  if (!projectId) return;
-  
-  try {
-    const db = await getDb();
-    const result = await db.select(
-      'SELECT данные_сметы_json, название_объекта FROM Сохраненные_сметы WHERE идентификатор = $1', 
-      [Number(projectId)]
-    );
-    
-    if (result.length > 0) {
-      const loadedData = JSON.parse(result[0].данные_сметы_json);
-      
-      const fallbackGlobalParams = loadedData.roofParams || { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 };
-      
-      estimateZones.value = loadedData.estimateZones || [];
-      
-      estimateZones.value.forEach(zone => {
-        if (!zone.baseType) {
-          zone.baseType = 'профлист';
-        }
-        if (!zone.roofParams) {
-          zone.roofParams = { ...fallbackGlobalParams };
-        }
-        
-        zone.sections.forEach(sec => {
-          sec.works.forEach(w => { if (w.expression === undefined) w.expression = w.qty; });
-          sec.materials.forEach(m => { if (m.expression === undefined) m.expression = m.qty; });
-        });
-      });
-
-      overheadExpenses.value = loadedData.overheadExpenses || [];
-      projectName.value = result[0].название_объекта;
-      
-      recalculateVolumes(); 
-      alert(`Смета "${projectName.value}" успешно загружена!`);
-    } else {
-      alert('Смета с таким ID не найдена в базе.');
-    }
-  } catch (error) {
-    console.error('Ошибка загрузки:', error);
-  }
-}
-
-
-
-
-function addZone() { 
-  estimateZones.value.push({ 
-    id: nextId++, 
-    name: 'Новый участок (ось)', 
-    baseType: 'профлист',
-    roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
-    sections: [] 
-  }); 
-}
 function removeZone(index) { if (confirm('Удалить весь участок со всеми расчетами?')) estimateZones.value.splice(index, 1); }
 function addSection(zone) { zone.sections.push({ id: nextId++, title: 'Новый раздел', works: [], materials: [] }); }
 function removeSection(zone, sIdx) { if (confirm('Удалить раздел?')) zone.sections.splice(sIdx, 1); }
 
-function addWork(section) { 
-  section.works.push({ code: 'Р' + codeCounters.value.work++, name: '', unit: 'м2', expression: '', qty: 0, price: 0 }); 
-}
-function addMaterial(section) { 
-  section.materials.push({ code: 'М' + codeCounters.value.mat++, name: '', unit: 'шт', expression: '', qty: 0, price: 0 }); 
-}
+function addWork(section) { section.works.push({ code: 'Р' + codeCounters.value.work++, name: '', unit: 'м2', expression: '', qty: 0, price: 0 }); }
+function addMaterial(section) { section.materials.push({ code: 'М' + codeCounters.value.mat++, name: '', supplier: 'ТехноНИКОЛЬ', unit: 'шт', expression: '', qty: 0, price: 0 }); }
 function addExpense() { overheadExpenses.value.push({ name: 'Новый расход', unit: 'ед', qty: 1, price: 0 }); }
-
-
-
 
 const getWorksTotal = (section) => section.works.reduce((sum, w) => sum + (w.qty * w.price), 0);
 const getMaterialsTotal = (section) => section.materials.reduce((sum, m) => sum + (m.qty * m.price), 0);
@@ -747,7 +679,10 @@ const grandTotalMaterials = computed(() => {
 });
 
 const totalExpenses = computed(() => overheadExpenses.value.reduce((sum, e) => sum + (e.qty * e.price), 0));
-const finalGrandTotal = computed(() => grandTotalWorks.value + grandTotalMaterials.value + totalExpenses.value);
+
+const subTotalWithoutVat = computed(() => grandTotalWorks.value + grandTotalMaterials.value + totalExpenses.value);
+const vatAmount = computed(() => subTotalWithoutVat.value * (vatRate.value / 100));
+const finalGrandTotalWithVat = computed(() => subTotalWithoutVat.value + vatAmount.value);
 
 function printEstimate() { window.print(); }
 </script>
@@ -783,13 +718,14 @@ input[type="number"],
 select { 
   height: 40px !important; 
   padding: 0 12px !important; 
+  margin: 0 !important;
   border: 1px solid #ced4da; 
   border-radius: 6px; 
   font-size: 0.95rem; 
   background: #fff; 
   width: 100%; 
   box-sizing: border-box; 
-  line-height: 40px !important; 
+  line-height: normal !important; 
   color: #333;
 }
 
@@ -799,21 +735,23 @@ input:focus, select:focus {
   box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
 }
 
-.input-group { 
+.calc-group { 
   display: flex; 
   flex-direction: column; 
   gap: 6px; 
-  flex: 1; 
   min-width: 0; 
 }
 
-.input-group label { 
+.calc-group label { 
   font-weight: 600; 
   font-size: 0.85rem; 
   color: #495057; 
   white-space: nowrap; 
   overflow: hidden;
   text-overflow: ellipsis; 
+  margin: 0; 
+  padding: 0;
+  line-height: 1.2;
 }
 
 
@@ -843,22 +781,24 @@ input:focus, select:focus {
   align-items: center; 
   background: #343a40; 
   padding: 0.75rem 1.5rem; 
-  gap: 15px; 
+  gap: 15px;
 }
-
 
 .zone-title-input { 
-  flex: 1; 
-  background: transparent !important; 
-  border: none !important; 
+  flex: 1;
+  background: rgba(255,255,255,0.1) !important; 
+  border: 1px solid rgba(255,255,255,0.2) !important; 
   color: white !important; 
-  font-size: 1.25rem !important; 
+  font-size: 1.2rem !important; 
   font-weight: bold !important; 
-  box-shadow: none !important;
-  height: 40px !important;
-  min-width: 0; 
+  height: 42px !important;
+  padding: 0 15px !important;
+  border-radius: 4px !important;
 }
-.zone-title-input::placeholder { color: #adb5bd; }
+.zone-title-input:focus {
+  background: rgba(255,255,255,0.2) !important;
+  border-color: #0d6efd !important;
+}
 
 
 .zone-params-block { 
@@ -876,22 +816,6 @@ input:focus, select:focus {
 }
 
 
-.type-select {
-  height: 40px !important;
-  cursor: pointer;
-  appearance: none; 
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23856404' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 16px;
-  padding-right: 35px !important;
-  background-color: #fff3cd !important;
-  border-color: #ffeeba !important;
-  font-weight: bold !important;
-  color: #856404 !important;
-}
-
-
 .section-block { padding: 1.5rem; }
 .section-header { margin-bottom: 1.5rem; border-bottom: 2px solid #e9ecef; padding-bottom: 0.5rem; }
 .section-title-input { 
@@ -902,27 +826,46 @@ input:focus, select:focus {
   padding: 0 !important;
   background: transparent !important;
   width: 70%;
-  margin-right: 10px;
 }
 .section-title-input:focus { border-bottom-color: #0d6efd !important; border-radius: 0; }
 
-.data-table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; table-layout: fixed; }
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+  margin-bottom: 1rem;
+  background: #fff;
+}
+
+.data-table { 
+  width: 100%; 
+  border-collapse: collapse; 
+  table-layout: fixed; 
+}
+.works-table { min-width: 1050px; }
+.mat-table { min-width: 1200px; }
+
 .data-table th { 
   background-color: #f8f9fa; 
-  padding: 10px; 
-  font-size: 0.8rem; 
+  padding: 12px 8px; 
+  font-size: 0.75rem; 
   text-transform: uppercase; 
   border: 1px solid #dee2e6;
   color: #6c757d;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
-.data-table td { border: 1px solid #dee2e6; padding: 0; position: relative; height: 45px; }
+.data-table td { border: 1px solid #dee2e6; padding: 0; position: relative; height: 45px; vertical-align: middle;}
 
 
 .col-code { width: 50px; }
-.col-name { width: 30%; }
-.col-unit { width: 65px; }
-.col-formula { width: 20%; }
-.col-qty { width: 85px; }
+.col-name { width: 330px; }
+.col-supplier { width: 140px; } 
+.col-unit { width: 60px; }
+.col-formula { width: 200px; }
+.col-qty { width: 90px; }
 .col-price { width: 110px; }
 .col-sum { width: 130px; }
 .col-action { width: 45px; border: none !important; }
@@ -930,16 +873,22 @@ input:focus, select:focus {
 
 .cell-input { 
   width: 100%; 
-  height: 45px !important; 
+  height: 44px !important; 
   border: none !important; 
   background: transparent !important; 
-  padding: 0 8px !important;
-  line-height: 45px !important;
+  padding: 0 12px !important;
+  line-height: 44px !important;
   border-radius: 0 !important;
+  margin: 0 !important;
+  display: block;
+  box-sizing: border-box;
 }
-.cell-input:focus { background: #fff !important; box-shadow: inset 0 0 0 2px #0d6efd !important; }
+.cell-input:focus { background: #fff !important; outline: none !important; box-shadow: inset 0 0 0 2px #0d6efd !important; z-index: 5;}
 
-.formula-input { color: #d81b60; font-family: 'Fira Code', monospace; font-weight: 700; font-size: 0.9rem; }
+.supplier-select { font-weight: bold; color: #0f5132; cursor: pointer; }
+.supplier-select:focus { background-color: #e8f5e9 !important; }
+
+.formula-input { color: #d81b60; font-family: 'Fira Code', 'Courier New', monospace; font-weight: 700; font-size: 0.9rem; }
 .qty-display { background: #f8f9fa; color: #2e7d32; font-weight: 800; font-size: 1rem; }
 .text-blue { color: #0d6efd; font-family: monospace; font-weight: 800; }
 
@@ -953,7 +902,6 @@ input:focus, select:focus {
   border-top: 2px solid #343a40; 
   margin-top: 1rem; 
 }
-
 
 .btn-text { 
   background: transparent; 
@@ -970,12 +918,7 @@ input:focus, select:focus {
   width: 100%; 
   text-align: center;
 }
-.btn-text:hover { 
-  background: #e8f5e9; 
-  border-color: #1b5e20;
-  color: #1b5e20;
-}
-
+.btn-text:hover { background: #e8f5e9; border-color: #1b5e20; color: #1b5e20; }
 
 .btn-outline { 
   background: transparent; 
@@ -993,15 +936,93 @@ input:focus, select:focus {
 .btn-outline:hover { background: #e3f2fd; border-color: #0b5ed7; }
 
 
-.add-zone-row { display: flex; justify-content: center; margin: 3rem 0; }
-.btn-large { 
-  padding: 1rem 2.5rem; 
-  font-size: 1.1rem; 
-  border-radius: 50px; 
-  box-shadow: 0 10px 20px rgba(13,110,253,0.2); 
-  transition: 0.3s; 
-}
+.add-zone-row { display: flex; justify-content: center; gap: 15px; margin: 3rem 0; align-items: center;}
+.btn-large { padding: 1rem 2.5rem; font-size: 1.1rem; border-radius: 50px; box-shadow: 0 10px 20px rgba(13,110,253,0.2); transition: 0.3s; height: auto !important;}
 .btn-large:hover { transform: translateY(-3px); box-shadow: 0 15px 25px rgba(13,110,253,0.3); }
+
+.custom-dropdown {
+  position: relative;
+  width: 380px;
+}
+.dropdown-toggle {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  border-radius: 15px;
+  border: 2px solid #0d6efd;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  background-color: #fff;
+  color: #0d6efd;
+  box-shadow: 0 4px 6px rgba(13, 110, 253, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+.dropdown-toggle:hover {
+  background-color: #e3f2fd;
+  box-shadow: 0 6px 12px rgba(13, 110, 253, 0.15);
+}
+.arrow {
+  font-size: 0.8rem;
+  transition: transform 0.3s ease;
+}
+.arrow-up {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  width: 100%;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  border: 1px solid #e9ecef;
+  z-index: 100;
+  max-height: 350px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.dropdown-item {
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  color: #2c3e50;
+  font-weight: 600;
+  text-align: left;
+}
+.dropdown-item:hover {
+  background: #f1f8ff;
+  color: #0d6efd;
+}
+.item-icon {
+  font-size: 1.2rem;
+  opacity: 0.8;
+}
+.dropdown-empty {
+  padding: 15px;
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+}
+
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
 
 .grand-totals { 
   margin-top: 4rem; 
@@ -1010,16 +1031,29 @@ input:focus, select:focus {
   background-color: #fff; 
   border-radius: 8px;
 }
+.summary-line { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; font-size: 1.1rem; }
+.highlight-line { border-top: 1px solid #000; padding-top: 1.5rem; margin-top: 1rem; font-size: 1.25rem; font-weight: 800; }
+.text-muted { color: #6c757d; font-size: 1rem; font-style: italic; }
+
+.totals-summary-block {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-top: 2rem;
+  border: 1px solid #dee2e6;
+}
+
 .final-grand-total { 
   display: flex; 
   justify-content: space-between; 
   font-size: 1.75rem; 
   font-weight: 900; 
   color: #d32f2f; 
-  margin-top: 2rem; 
+  margin-top: 1.5rem; 
   padding-top: 1.5rem; 
   border-top: 3px solid #343a40; 
 }
+
 
 .btn-success { background: #198754; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;}
 .btn-success:hover { background: #157347; }
@@ -1050,5 +1084,6 @@ input:focus, select:focus {
   .data-table th, .data-table td { border: 1px solid #000; color: #000; }
   .final-grand-total { color: #000; border-top: 4px solid #000; }
   .document-header-text { border: 1px solid #ccc; background: #fff; }
+  .totals-summary-block { background: transparent; border: none; padding: 0; margin-top: 1rem; }
 }
 </style>

@@ -5,6 +5,8 @@ import PresetsView from '../views/PresetsView.vue'
 import FormulasView from '../views/FormulasView.vue'
 import CoefficientsView from '../views/CoefficientsView.vue'
 import TriggersView from '../views/TriggersView.vue'
+import TemplatesView from '../views/TemplatesView.vue'
+
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -38,6 +40,11 @@ const router = createRouter({
       path: '/triggers',
       name: 'triggers',
       component: TriggersView
+    },
+    {
+      path: '/templates',
+      name: 'templates',
+      component: TemplatesView
     }
   ]
 })

@@ -9,6 +9,7 @@
         <router-link class="nav-link" to="/formulas">formulas</router-link>
         <router-link class="nav-link" to="/coefficients">coefficients</router-link>
         <router-link class="nav-link" to="/triggers">triggers</router-link>
+        <router-link class="nav-link" to="/templates">templates</router-link>
       </nav>
     </aside>
 

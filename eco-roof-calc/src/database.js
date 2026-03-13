@@ -132,5 +132,13 @@ await db.execute(`
   await db.execute("ALTER TABLE Справочник_материалов ADD COLUMN избранное INTEGER DEFAULT 0").catch(() => {});
   await db.execute("ALTER TABLE Справочник_видов_работ ADD COLUMN избранное INTEGER DEFAULT 0").catch(() => {});
 
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS Справочник_шаблонов (
+      идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
+      название TEXT,
+      данные_json TEXT
+    )
+  `);
+
   console.log('Гибридная база данных успешно инициализирована!');
 }
