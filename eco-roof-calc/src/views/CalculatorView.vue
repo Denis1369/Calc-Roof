@@ -41,6 +41,7 @@
 
         <div class="zone-params-block hide-on-print">
           <div class="zone-params-title">Ввод параметров для этого участка (для формул):</div>
+          
           <div class="params-grid">
             <div class="calc-group">
               <label>Тип материалов</label>
@@ -54,6 +55,18 @@
             <div class="calc-group"><label>Водоотвод (шт)</label><input type="number" v-model.number="zone.roofParams.parapetDrains" @input="recalculateVolumes" min="0" /></div>
             <div class="calc-group"><label>Воронки (ID, шт)</label><input type="number" v-model.number="zone.roofParams.innerDrains" @input="recalculateVolumes" min="0" /></div>
             <div class="calc-group"><label>Аэраторы (A, шт)</label><input type="number" v-model.number="zone.roofParams.aerators" @input="recalculateVolumes" min="0" /></div>
+            
+            <div class="calc-group" v-for="(cp, pIdx) in zone.customParams" :key="'cp'+pIdx">
+              <label class="custom-param-label">
+                <span :title="cp.name">{{ cp.name }} ({{ cp.symbol }})</span>
+                <span @click="zone.customParams.splice(pIdx, 1); recalculateVolumes()" class="remove-param" title="Удалить переменную">✕</span>
+              </label>
+              <input type="number" v-model.number="cp.value" @input="recalculateVolumes" min="0" step="0.1" class="custom-param-input" />
+            </div>
+          </div>
+
+          <div class="add-param-row">
+            <button @click="addCustomParam(zone)" class="btn-link-small">+ Добавить свою переменную для формул</button>
           </div>
         </div>
 
@@ -182,7 +195,7 @@ const {
   projectName, vatRate, estimateZones, overheadExpenses, worksDb, materialsDb, formulasDb, savedTemplatesDb,
   isTemplateDropdownOpen, dropdownRef, selectTemplate, applySupplierToZone,
   globalRoofParams, loadDatabases, unloadDatabases, onWorkNameChange, onMaterialNameChange, applyFormula, recalculateVolumes,
-  saveProject, loadProject, addZone, removeZone, addSection, removeSection, addWork, addMaterial, addExpense,
+  saveProject, loadProject, addZone, removeZone, addSection, removeSection, addWork, addMaterial, addExpense, addCustomParam,
   getSectionTotal, grandTotalWorks, grandTotalMaterials, totalExpenses, subTotalWithoutVat, vatAmount, finalGrandTotalWithVat, printEstimate
 } = useCalculator();
 
@@ -276,6 +289,14 @@ input:focus, select:focus { border-color: #0d6efd; outline: none; box-shadow: 0 
 .text-muted { color: #6c757d; font-size: 1rem; font-style: italic; }
 .totals-summary-block { background: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin-top: 2rem; border: 1px solid #dee2e6; }
 .final-grand-total { display: flex; justify-content: space-between; font-size: 1.75rem; font-weight: 900; color: #d32f2f; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 3px solid #343a40; }
+
+.add-param-row { margin-top: 1rem; text-align: right; }
+.btn-link-small { background: none; border: none; color: #0d6efd; font-size: 0.85rem; font-weight: bold; cursor: pointer; text-decoration: underline; }
+.btn-link-small:hover { color: #0b5ed7; }
+.custom-param-label { display: flex; justify-content: space-between; color: #d81b60 !important; }
+.remove-param { color: #dc3545; cursor: pointer; font-size: 0.9rem; margin-left: 5px; }
+.remove-param:hover { font-weight: bold; }
+.custom-param-input { border-color: #f48fb1 !important; background: #fffbfd !important; }
 
 @media print {
   .hide-on-print { display: none !important; }

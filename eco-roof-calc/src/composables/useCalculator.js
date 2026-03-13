@@ -6,7 +6,7 @@ import { evaluate } from 'mathjs';
 export function useCalculator() {
   const route = useRoute(); 
   const projectName = ref('');
-  const vatRate = ref(22); 
+  const vatRate = ref(20); 
 
   const worksDb = ref([]);
   const materialsDb = ref([]);
@@ -113,46 +113,8 @@ export function useCalculator() {
     }
   }
 
-  async function onWorkNameChange(work, section, zone) {
+  function onWorkNameChange(work, section, zone) {
     updateWorkPrice(work);
-    if (!work.name) return;
-    const nameLower = work.name.toLowerCase();
-
-    for (const macro of macrosDb.value) {
-      if (!macro.условие) continue;
-      const keywords = macro.условие.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
-      if (keywords.every(kw => nameLower.includes(kw))) {
-        if (macro.название_работы && work.name !== macro.название_работы) {
-          work.name = macro.название_работы;
-          updateWorkPrice(work); 
-        }
-        if (macro.формула_работы && !work.expression) work.expression = macro.формула_работы;
-
-        const db = await getDb();
-        try {
-          const linkedMaterials = await db.select(
-            'SELECT * FROM Материалы_макроса WHERE идентификатор_макроса = $1', [macro.идентификатор]
-          );
-          for (const mData of linkedMaterials) {
-            const hasMat = section.materials.some(m => m.name === mData.название_материала);
-            if (!hasMat) {
-              const finalFormula = mData.формула_материала.replace(/\[WORK_CODE\]/g, `[${work.code}]`);
-              const newMat = { 
-                code: 'М' + codeCounters.value.mat++, 
-                name: mData.название_материала, 
-                supplier: zone.supplierType || 'ТехноНИКОЛЬ',
-                unit: mData.ед_изм_материала, 
-                expression: finalFormula, 
-                qty: 0, price: 0 
-              };
-              updateMaterialPrice(newMat);
-              section.materials.push(newMat);
-            }
-          }
-        } catch (e) {}
-        break; 
-      }
-    }
     recalculateVolumes();
   }
 
@@ -203,7 +165,7 @@ export function useCalculator() {
     });
   }
 
-  function parseAndEvaluate(expr, itemsMap, currentCode, currentName, zoneParams) {
+  function parseAndEvaluate(expr, itemsMap, currentCode, currentName, zone) {
     if (!expr && expr !== 0) return 0;
     let exprStr = String(expr).trim().replace(/,/g, '.');
     if (exprStr === '') return 0;
@@ -228,11 +190,20 @@ export function useCalculator() {
       });
 
       const context = {
-        S: zoneParams.area || 0,        s: zoneParams.area || 0,
-        P: zoneParams.perimeter || 0,   p: zoneParams.perimeter || 0,
-        ID: zoneParams.innerDrains || 0, id: zoneParams.innerDrains || 0,
-        A: zoneParams.aerators || 0,    a: zoneParams.aerators || 0
+        S: zone.roofParams?.area || 0,        s: zone.roofParams?.area || 0,
+        P: zone.roofParams?.perimeter || 0,   p: zone.roofParams?.perimeter || 0,
+        ID: zone.roofParams?.innerDrains || 0, id: zone.roofParams?.innerDrains || 0,
+        A: zone.roofParams?.aerators || 0,    a: zone.roofParams?.aerators || 0
       };
+
+      if (zone.customParams) {
+        zone.customParams.forEach(cp => {
+          if (cp.symbol) {
+            context[cp.symbol] = cp.value || 0;
+            context[cp.symbol.toLowerCase()] = cp.value || 0;
+          }
+        });
+      }
       
       return Number(evaluate(parsedExpr, context).toFixed(2));
     } catch (e) {
@@ -250,14 +221,14 @@ export function useCalculator() {
 
         zone.sections.forEach(section => {
           section.works.forEach(work => {
-            let val = parseAndEvaluate(work.expression, itemsMap, work.code, work.name, zParams);
+            let val = parseAndEvaluate(work.expression, itemsMap, work.code, work.name, zone); 
             if (work.code) itemsMap[work.code] = val;
             if (work.name) itemsMap[work.name.trim()] = val;
             if (pass === 2) { work.qty = val; updateWorkPrice(work); }
           });
           
           section.materials.forEach(mat => {
-            let val = parseAndEvaluate(mat.expression, itemsMap, mat.code, mat.name, zParams);
+            let val = parseAndEvaluate(mat.expression, itemsMap, mat.code, mat.name, zone); 
             if (mat.code) itemsMap[mat.code] = val;
             if (mat.name) itemsMap[mat.name.trim()] = val;
             if (pass === 2) mat.qty = val;
@@ -314,6 +285,7 @@ export function useCalculator() {
     estimateZones.value.push({ 
       id: nextId++, name: 'Новый участок (ось)', supplierType: 'ТехноНИКОЛЬ',
       roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
+      customParams: [],
       sections: [] 
     }); 
   }
@@ -321,11 +293,22 @@ export function useCalculator() {
   async function addZoneFromTemplate(templateId) {
     const tmpl = savedTemplatesDb.value.find(t => t.идентификатор === Number(templateId));
     if (!tmpl) return;
-    const parsedSections = JSON.parse(tmpl.данные_json || '[]');
+    
+    let parsedData = JSON.parse(tmpl.данные_json || '{}');
+    let parsedSections = [];
+    let parsedCustomParams = [];
+
+    if (Array.isArray(parsedData)) {
+      parsedSections = parsedData;
+    } else {
+      parsedSections = parsedData.sections || [];
+      parsedCustomParams = parsedData.customParams || [];
+    }
     
     estimateZones.value.push({
       id: nextId++, name: `Монтаж системы: ${tmpl.название}`, supplierType: 'ТехноНИКОЛЬ',
       roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
+      customParams: parsedCustomParams.map(p => ({ symbol: p.symbol, name: p.name, value: 0 })),
       sections: parsedSections.map(sec => ({
         ...sec, id: nextId++,
         works: sec.works.map(w => ({ ...w, code: 'Р' + codeCounters.value.work++, qty: 0, price: 0 })),
@@ -350,6 +333,17 @@ export function useCalculator() {
   function addWork(section) { section.works.push({ code: 'Р' + codeCounters.value.work++, name: '', unit: 'м2', expression: '', qty: 0, price: 0 }); }
   function addMaterial(section, zone) { section.materials.push({ code: 'М' + codeCounters.value.mat++, name: '', supplier: zone.supplierType || 'ТехноНИКОЛЬ', unit: 'шт', expression: '', qty: 0, price: 0 }); }
   function addExpense() { overheadExpenses.value.push({ name: 'Новый расход', unit: 'ед', qty: 1, price: 0 }); }
+
+  function addCustomParam(zone) {
+    const name = prompt('Название переменной (например: Длина конька):');
+    if (!name) return;
+    let symbol = prompt('Символ для формул (английская буква, например: L):');
+    if (!symbol) return;
+    symbol = symbol.trim().toUpperCase();
+
+    if (!zone.customParams) zone.customParams = [];
+    zone.customParams.push({ name, symbol, value: 0 });
+  }
 
   const getSectionTotal = (section) => {
     const worksTotal = section.works.reduce((sum, w) => sum + ((w.qty||0) * (w.price||0)), 0);
@@ -381,6 +375,7 @@ export function useCalculator() {
     isTemplateDropdownOpen, dropdownRef, closeDropdown, selectTemplate, applySupplierToZone,
     globalRoofParams, loadDatabases, unloadDatabases, onWorkNameChange, onMaterialNameChange, applyFormula, recalculateVolumes,
     saveProject, loadProject, addZone, addZoneFromTemplate, removeZone, addSection, removeSection, addWork, addMaterial, addExpense,
+    addCustomParam,
     getSectionTotal, grandTotalWorks, grandTotalMaterials, totalExpenses, subTotalWithoutVat, vatAmount, finalGrandTotalWithVat, printEstimate
   }
 }

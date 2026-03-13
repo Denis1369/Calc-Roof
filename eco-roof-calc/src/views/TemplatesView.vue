@@ -2,7 +2,7 @@
   <div class="templates-view">
     <header class="header">
       <h2>Конструктор систем (Шаблоны кровель)</h2>
-      <p class="subtitle">Соберите стандартные кровельные пироги. Их можно будет в один клик добавлять в смету.</p>
+      <p class="subtitle">Соберите стандартные кровельные пироги и задайте уникальные переменные.</p>
     </header>
 
     <div class="layout">
@@ -26,7 +26,21 @@
           <input v-model="currentTemplate.название" class="title-input" placeholder="Название шаблона (Напр: ТН-КРОВЛЯ Смарт)" />
         </div>
 
-        <div class="sections-container">
+        <div class="custom-params-card">
+          <h5>Уникальные переменные шаблона (для формул):</h5>
+          <p class="text-muted small-text">Стандартные S (Площадь), P (Периметр), ID (Воронки), A (Аэраторы) уже есть.</p>
+          
+          <div v-for="(cp, idx) in currentTemplate.customParams" :key="idx" class="item-row mt-2">
+            <input v-model="cp.name" placeholder="Название (напр: Длина конька)" class="flex-2 item-input" />
+            <input v-model="cp.symbol" placeholder="Символ (напр: L)" class="flex-1 item-input center formula-font text-blue" />
+            <button @click="currentTemplate.customParams.splice(idx, 1)" class="btn-danger-small">✕</button>
+          </div>
+          <button @click="currentTemplate.customParams.push({ name: '', symbol: '' })" class="btn-add-inline btn-param mt-2">
+            + Добавить переменную
+          </button>
+        </div>
+
+        <div class="sections-container mt-3">
           <div v-for="(section, sIdx) in currentTemplate.sections" :key="sIdx" class="section-card">
             <div class="section-header">
               <input v-model="section.title" class="section-title-input" placeholder="Название раздела (Напр: 1. Пароизоляция)" />
@@ -108,22 +122,38 @@ async function loadTemplates() {
 
 const addNewTemplate = () => { 
   isNew.value = true; 
-  currentTemplate.value = { название: 'Новая кровельная система', sections: [] } 
+  currentTemplate.value = { название: 'Новая кровельная система', sections: [], customParams: [] } 
   addSection();
 }
 
 const editTemplate = (tmpl) => { 
   isNew.value = false; 
-  currentTemplate.value = {
-    идентификатор: tmpl.идентификатор,
-    название: tmpl.название,
-    sections: JSON.parse(tmpl.данные_json || '[]')
-  };
+  try {
+    const rawData = tmpl.данные_json || '{}';
+    const parsedData = JSON.parse(rawData);
+    
+    
+    let sections = [];
+    let customParams = [];
+    if (Array.isArray(parsedData)) {
+      sections = parsedData;
+    } else {
+      sections = parsedData.sections || [];
+      customParams = parsedData.customParams || [];
+    }
+
+    currentTemplate.value = {
+      идентификатор: tmpl.идентификатор,
+      название: tmpl.название,
+      sections: sections,
+      customParams: customParams
+    };
+  } catch (e) {
+    currentTemplate.value = { идентификатор: tmpl.идентификатор, название: tmpl.название, sections: [], customParams: [] };
+  }
 }
 
-const addSection = () => {
-  currentTemplate.value.sections.push({ title: 'Новый этап работ', works: [], materials: [] });
-}
+const addSection = () => { currentTemplate.value.sections.push({ title: 'Новый этап работ', works: [], materials: [] }); }
 const removeSection = (idx) => currentTemplate.value.sections.splice(idx, 1)
 
 const addWork = (section) => section.works.push({ name: '', unit: 'м2', expression: '' })
@@ -134,18 +164,17 @@ const cancelEdit = () => { currentTemplate.value = null }
 const saveTemplate = async () => {
   try {
     const db = await getDb()
-    const jsonStr = JSON.stringify(currentTemplate.value.sections);
+    
+    const templateData = {
+      sections: currentTemplate.value.sections,
+      customParams: currentTemplate.value.customParams
+    };
+    const jsonStr = JSON.stringify(templateData);
 
     if (isNew.value) {
-      await db.execute(
-        'INSERT INTO Справочник_шаблонов (название, данные_json) VALUES ($1, $2)', 
-        [currentTemplate.value.название, jsonStr]
-      )
+      await db.execute('INSERT INTO Справочник_шаблонов (название, данные_json) VALUES ($1, $2)', [currentTemplate.value.название, jsonStr])
     } else {
-      await db.execute(
-        'UPDATE Справочник_шаблонов SET название=$1, данные_json=$2 WHERE идентификатор=$3', 
-        [currentTemplate.value.название, jsonStr, currentTemplate.value.идентификатор]
-      )
+      await db.execute('UPDATE Справочник_шаблонов SET название=$1, данные_json=$2 WHERE идентификатор=$3', [currentTemplate.value.название, jsonStr, currentTemplate.value.идентификатор])
     }
     await loadTemplates()
     currentTemplate.value = null
@@ -179,7 +208,13 @@ const deleteTemplate = async () => {
 .title-input { flex: 1; font-size: 1.4rem; font-weight: bold; border: none; border-bottom: 2px solid #ced4da; background: transparent; outline: none; padding: 5px 0;}
 .title-input:focus { border-color: #0d6efd; }
 
-.sections-container { display: flex; flex-direction: column; gap: 20px; max-height: 60vh; overflow-y: auto; padding-right: 10px; margin-bottom: 20px; }
+.custom-params-card { background: #fff3e0; padding: 15px; border-radius: 8px; border: 1px dashed #ffb74d; }
+.custom-params-card h5 { margin: 0 0 5px 0; color: #e65100; font-size: 0.9rem;}
+.small-text { font-size: 0.8rem; margin-bottom: 10px; }
+.btn-param { background: transparent; border: 1px dashed #e65100; color: #e65100; }
+.btn-param:hover { background: #ffe0b2; }
+
+.sections-container { display: flex; flex-direction: column; gap: 20px; max-height: 55vh; overflow-y: auto; padding-right: 10px; margin-bottom: 20px; }
 .section-card { background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #ced4da; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
 .section-header { display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
 .section-title-input { font-size: 1.1rem; font-weight: bold; border: none; background: transparent; outline: none; width: 100%; color: #2c3e50;}
@@ -190,7 +225,8 @@ const deleteTemplate = async () => {
 .item-input:focus { border-color: #0d6efd; outline: none; }
 .flex-1 { flex: 1; } .flex-2 { flex: 2; } .flex-3 { flex: 3; }
 .center { text-align: center; }
-.formula-font { font-family: monospace; font-weight: bold; color: #d81b60; }
+.formula-font { font-family: monospace; font-weight: bold; }
+.text-blue { color: #d81b60; }
 
 .btn-danger-small { background: #fee2e2; color: #dc2626; border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-weight: bold;}
 .btn-add-inline { width: 100%; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9rem; transition: 0.2s;}
@@ -208,5 +244,5 @@ const deleteTemplate = async () => {
 .btn-icon { background: none; border: none; font-size: 1.2rem; cursor: pointer; }
 .text-danger { color: #dc3545; }
 .empty-msg { color: #999; font-style: italic; }
-.mt-3 { margin-top: 15px; }
+.mt-2 { margin-top: 10px; } .mt-3 { margin-top: 15px; }
 </style>

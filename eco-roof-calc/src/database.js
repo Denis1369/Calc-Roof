@@ -48,35 +48,6 @@ export async function initDatabase() {
   `);
 
   await db.execute(`
-    CREATE TABLE IF NOT EXISTS Справочник_систем (
-      идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
-      наименование_системы TEXT
-    )
-  `);
-
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS Шаблоны_разделов_системы (
-      идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
-      идентификатор_системы INTEGER,
-      наименование_раздела TEXT,
-      порядок_сортировки INTEGER,
-      FOREIGN KEY(идентификатор_системы) REFERENCES Справочник_систем(идентификатор)
-    )
-  `);
-
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS Нормы_в_разделе (
-      идентификатор_связи INTEGER PRIMARY KEY AUTOINCREMENT,
-      идентификатор_раздела INTEGER,
-      тип_записи TEXT, -- 'работа' или 'материал'
-      идентификатор_элемента INTEGER, -- ID работы или ID материала
-      коэффициент_расхода REAL,
-      привязка_к_параметру TEXT, -- 'площадь', 'периметр', 'воронки'
-      FOREIGN KEY(идентификатор_раздела) REFERENCES Шаблоны_разделов_системы(идентификатор)
-    )
-  `);
-
-  await db.execute(`
     CREATE TABLE IF NOT EXISTS Справочник_коэффициентов (
       идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
       заголовок TEXT,
@@ -92,28 +63,6 @@ export async function initDatabase() {
       выражение TEXT
     )
   `);
-
-  
-await db.execute(`
-  CREATE TABLE IF NOT EXISTS Справочник_макросов (
-    идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
-    описание TEXT,
-    условие TEXT,
-    название_работы TEXT,
-    формула_работы TEXT
-  )
-`);
-
-await db.execute(`
-  CREATE TABLE IF NOT EXISTS Материалы_макроса (
-    идентификатор INTEGER PRIMARY KEY AUTOINCREMENT,
-    идентификатор_макроса INTEGER,
-    название_материала TEXT,
-    ед_изм_материала TEXT,
-    формула_материала TEXT,
-    FOREIGN KEY(идентификатор_макроса) REFERENCES Справочник_макросов(идентификатор) ON DELETE CASCADE
-  )
-`);
 
   
   
