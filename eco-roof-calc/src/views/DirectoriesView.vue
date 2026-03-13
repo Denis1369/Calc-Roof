@@ -40,14 +40,14 @@ onMounted(() => {
   font-family: 'Inter', sans-serif; 
 }
 .header h1 { 
-  color: #2e7d32; 
+  color: #FFFFFF; 
   margin-bottom: 0.5rem; 
 }
 .tabs { 
   display: flex; 
   gap: 1rem; 
   margin-bottom: 2rem; 
-  border-bottom: 2px solid #e0e0e0; 
+  border-bottom: 2px solid #4A5A63; 
   padding-bottom: 0.5rem; 
 }
 .tabs button { 
@@ -55,17 +55,17 @@ onMounted(() => {
   border: none; 
   font-size: 1.1rem; 
   font-weight: 600; 
-  color: #757575; 
+  color: #A0B1BA; 
   cursor: pointer; 
   padding: 0.5rem 1rem; 
   border-radius: 6px; 
   transition: 0.2s; 
 }
 .tabs button:hover { 
-  background: #f5f5f5; 
+  background: rgba(255, 255, 255, 0.05); 
 }
 .tabs button.active { 
-  color: #2e7d32; 
-  background: #e8f5e9; 
+  color: #F29A2E; 
+  background: rgba(242, 154, 46, 0.1); 
 }
 </style>

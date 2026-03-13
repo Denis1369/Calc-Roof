@@ -123,28 +123,29 @@ const deleteCoefficient = async (coef) => {
 </script>
 
 <style scoped>
-.coefficients-view { padding: 20px; }
-.subtitle { color: #666; margin-bottom: 20px; }
-.table-container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
+.coefficients-view { padding: 20px; color: #FFFFFF; }
+.subtitle { color: #A0B1BA; margin-bottom: 20px; }
+.table-container { background: #37444B; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #4A5A63; }
 
 .toolbar { display: flex; gap: 15px; margin-bottom: 1rem; align-items: center; }
-.search-input { flex: 1; padding: 10px 15px; border: 1px solid #ced4da; border-radius: 4px; font-size: 1rem; outline: none; transition: border-color 0.2s; }
-.search-input:focus { border-color: #4CAF50; box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2); }
+.search-input { flex: 1; padding: 10px 15px; border: 1px solid #4A5A63; background: #21292E; color: #FFFFFF; border-radius: 4px; font-size: 1rem; outline: none; transition: border-color 0.2s; }
+.search-input:focus { border-color: #F29A2E; box-shadow: 0 0 0 2px rgba(242, 154, 46, 0.2); }
 
 .data-table { width: 100%; border-collapse: collapse; }
-.data-table th, .data-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-.data-table th { background-color: #f2f2f2; }
-.cell-input { width: 100%; border: none; padding: 8px; outline: none; background: transparent; font-size: 1rem; }
-.cell-input:focus { background: #f0f8ff; border-radius: 4px; }
+.data-table th, .data-table td { border: 1px solid #4A5A63; padding: 8px; text-align: left; color: #FFFFFF; }
+.data-table th { background-color: #21292E; color: #A0B1BA; text-transform: uppercase; font-size: 0.85rem; border-bottom: 2px solid #F29A2E; }
+.cell-input { width: 100%; border: none; padding: 8px; outline: none; background: transparent; font-size: 1rem; color: #FFFFFF; transition: 0.2s; box-sizing: border-box; }
+.cell-input:focus { background: #21292E; border-radius: 4px; box-shadow: inset 0 0 0 2px #F29A2E; }
 .bold { font-weight: bold; }
-.text-blue { color: #1976d2; }
-.text-muted { color: #999; }
+.text-blue { color: #F29A2E; }
+.text-muted { color: #A0B1BA; }
 .col-category { width: 150px; }
 .col-value { width: 120px; text-align: center; }
 .col-actions { width: 100px; text-align: center; }
 .center { text-align: center; }
-.btn-add { background: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; }
-.btn-icon { background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0 5px; }
-.text-danger { color: red; }
+.btn-add { background: #F29A2E; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; font-weight: bold; transition: 0.2s; }
+.btn-add:hover { background: #D98826; }
+.btn-icon { background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0 5px; color: #A0B1BA; opacity: 0.6; transition: 0.2s; }
+.btn-icon:hover { opacity: 1; transform: scale(1.2); color: #ff4d4f; }
+.text-danger { color: #ff4d4f; }
 </style>

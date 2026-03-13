@@ -29,7 +29,7 @@
               />
             </td>
             <td v-if="type === 'material'" class="center">
-              <select v-model="item.supplier" class="cell-input center supplier-select" :class="{'analog-text': item.supplier === 'Аналог'}">
+              <select v-model="item.supplier" class="cell-input center supplier-select">
                 <option value="ТехноНИКОЛЬ">ТехноНИКОЛЬ</option>
                 <option value="Аналог">Аналог</option>
               </select>
@@ -79,13 +79,13 @@ const totalSum = computed(() => {
 </script>
 
 <style scoped>
-.table-subtitle { font-weight: bold; margin-bottom: 0.5rem; font-style: italic; }
-.table-wrapper { width: 100%; overflow-x: auto; border-radius: 4px; border: 1px solid #dee2e6; margin-bottom: 1rem; background: #fff; }
+.table-subtitle { font-weight: bold; margin-bottom: 0.5rem; font-style: italic; color: #A0B1BA; }
+.table-wrapper { width: 100%; overflow-x: auto; border-radius: 4px; border: 1px solid #4A5A63; margin-bottom: 1rem; background: #2A3439; }
 .data-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .works-table { min-width: 1050px; }
 .mat-table { min-width: 1200px; }
-.data-table th { background-color: #f8f9fa; padding: 12px 8px; font-size: 0.75rem; text-transform: uppercase; border: 1px solid #dee2e6; color: #6c757d; position: sticky; top: 0; z-index: 2; }
-.data-table td { border: 1px solid #dee2e6; padding: 0; position: relative; height: 45px; vertical-align: middle;}
+.data-table th { background-color: #21292E; padding: 12px 8px; font-size: 0.75rem; text-transform: uppercase; border: 1px solid #4A5A63; color: #A0B1BA; position: sticky; top: 0; z-index: 2; }
+.data-table td { border: 1px solid #4A5A63; padding: 0; position: relative; height: 45px; vertical-align: middle; color: #FFFFFF; }
 .col-code { width: 50px; }
 .col-name { width: 330px; }
 .col-supplier { width: 140px; } 
@@ -94,28 +94,34 @@ const totalSum = computed(() => {
 .col-qty { width: 90px; }
 .col-price { width: 110px; }
 .col-sum { width: 130px; }
-.col-action { width: 45px; border: none !important; }
-.cell-input { width: 100%; height: 44px !important; border: none !important; background: transparent !important; padding: 0 12px !important; line-height: 44px !important; border-radius: 0 !important; margin: 0 !important; display: block; box-sizing: border-box; }
-.cell-input:focus { background: #fff !important; outline: none !important; box-shadow: inset 0 0 0 2px #0d6efd !important; z-index: 5;}
-.supplier-select { font-weight: bold; color: #0f5132; cursor: pointer; }
-.supplier-select:focus { background-color: #e8f5e9 !important; }
-.analog-text { color: #d97706 !important; } 
-.formula-input { color: #d81b60; font-family: 'Fira Code', monospace; font-weight: 700; font-size: 0.9rem; }
-.qty-display { background: #f8f9fa; color: #2e7d32; font-weight: 800; font-size: 1rem; }
-.text-blue { color: #0d6efd; font-family: monospace; font-weight: 800; }
-.subtotal-row { text-align: right; padding: 0.75rem 0; border-top: 1px solid #eee; }
-.subtotal-label { margin-right: 1rem; }
-.subtotal-value { font-weight: bold; min-width: 150px; display: inline-block; }
-.btn-text { background: transparent; border: 2px dashed #198754; color: #198754; font-weight: 700; cursor: pointer; padding: 0.6rem 1.2rem; font-size: 0.95rem; border-radius: 6px; transition: all 0.2s ease-in-out; display: block; margin-top: 10px; width: 100%; text-align: center; }
-.btn-text:hover { background: #e8f5e9; border-color: #1b5e20; color: #1b5e20; }
+.col-action { width: 45px; border: none !important; background: transparent; }
+.cell-input { width: 100%; height: 44px !important; border: none !important; background: transparent !important; padding: 0 12px !important; line-height: 44px !important; border-radius: 0 !important; margin: 0 !important; display: block; box-sizing: border-box; color: #FFFFFF !important; color-scheme: dark; }
+.cell-input:focus { background: #21292E !important; outline: none !important; box-shadow: inset 0 0 0 2px #F29A2E !important; z-index: 5; }
+.supplier-select { font-weight: bold; color: #F29A2E; cursor: pointer; }
+.supplier-select:focus { background-color: rgba(242, 154, 46, 0.1) !important; }
+.formula-input { color: #A0B1BA; font-family: 'Fira Code', monospace; font-weight: 700; font-size: 0.9rem; }
+.qty-display { background: #21292E; color: #F29A2E; font-weight: 800; font-size: 1rem; }
+.text-blue { color: #F29A2E; font-family: monospace; font-weight: 800; }
+.subtotal-row { text-align: right; padding: 0.75rem 0; border-top: 1px solid #4A5A63; color: #FFFFFF; }
+.subtotal-label { margin-right: 1rem; color: #A0B1BA; }
+.subtotal-value { font-weight: bold; min-width: 150px; display: inline-block; color: #F29A2E; }
+.btn-text { background: transparent; border: 2px dashed #A0B1BA; color: #A0B1BA; font-weight: 700; cursor: pointer; padding: 0.6rem 1.2rem; font-size: 0.95rem; border-radius: 6px; transition: all 0.2s ease-in-out; display: block; margin-top: 10px; width: 100%; text-align: center; }
+.btn-text:hover { background: rgba(242, 154, 46, 0.05); border-color: #F29A2E; color: #F29A2E; }
 .btn-icon { opacity: 0.4; transition: 0.2s; background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 0; }
-.btn-icon:hover { opacity: 1; transform: scale(1.2); }
+.btn-icon:hover { opacity: 1; transform: scale(1.2); color: #ff4d4f; }
 .center { text-align: center; }
 .right { text-align: right; }
 .bold { font-weight: bold; }
-@media print { .hide-on-print { display: none !important; } .data-table th, .data-table td { border: 1px solid #000; color: #000; } }
-
-
+@media print { 
+  .hide-on-print { display: none !important; } 
+  .data-table th, .data-table td { border: 1px solid #000; color: #000; background: #fff; } 
+  .qty-display { color: #000; background: #fff; }
+  .text-blue { color: #000; }
+  .subtotal-row { color: #000; }
+  .subtotal-label { color: #000; }
+  .subtotal-value { color: #000; }
+  .formula-input { color: #000; }
+}
 
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
@@ -126,11 +132,21 @@ input[type="number"] {
   -moz-appearance: textfield; 
 }
 
-
 input::-webkit-calendar-picker-indicator {
   display: none !important;
 }
 input::-webkit-list-button {
   display: none !important;
+}
+
+select option {
+  background-color: #21292E !important;
+  color: #FFFFFF !important;
+  font-weight: bold;
+}
+
+select option:checked {
+  background-color: #37444B !important;
+  color: #FFFFFF !important;
 }
 </style>
