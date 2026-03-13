@@ -4,31 +4,18 @@ import { getDb } from '../database.js';
 import { evaluate } from 'mathjs';
 import Swal from 'sweetalert2';
 
-const SkYugSwal = Swal.mixin({
-  background: '#1c3b3c', 
-  color: '#ffffff',    
-  confirmButtonColor: '#f59d1a',
-  cancelButtonColor: '#4a6263',
-  borderRadius: '8px',
-  customClass: {
-    popup: 'sk-yug-popup', 
-  }
-});
-
 const Toast = Swal.mixin({
   toast: true,
   position: 'top-end',
   showConfirmButton: false,
   timer: 3000,
   timerProgressBar: true,
-  background: '#1c3b3c',
-  color: '#ffffff',
-  iconColor: '#f59d1a',
   didOpen: (toast) => {
     toast.addEventListener('mouseenter', Swal.stopTimer)
     toast.addEventListener('mouseleave', Swal.resumeTimer)
   }
 });
+
 export function useCalculator() {
   const route = useRoute(); 
   const projectName = ref('');
@@ -266,7 +253,7 @@ export function useCalculator() {
 
   async function saveProject() {
     if (!projectName.value) { 
-      SkYugSwal.fire('Внимание!', 'Пожалуйста, укажите название проекта!', 'warning'); 
+      Swal.fire('Внимание!', 'Пожалуйста, укажите название проекта!', 'warning'); 
       return; 
     }
     try {
@@ -282,7 +269,7 @@ export function useCalculator() {
   }
 
   async function loadProject() {
-    const { value: projectId } = await SkYugSwal.fire({
+    const { value: projectId } = await Swal.fire({
       title: 'Загрузка сметы',
       text: 'Введите ID сохраненной сметы:',
       input: 'text',
@@ -319,7 +306,7 @@ export function useCalculator() {
         
         Toast.fire({ icon: 'success', title: 'Смета загружена!' });
       } else {
-        SkYugSwal.fire('Не найдено', 'Смета с таким ID не найдена.', 'error');
+        Swal.fire('Не найдено', 'Смета с таким ID не найдена.', 'error');
       }
     } catch (error) { 
       console.error('Ошибка загрузки:', error); 
@@ -372,7 +359,7 @@ export function useCalculator() {
   }
 
   async function removeZone(index) { 
-    const { isConfirmed } = await SkYugSwal.fire({
+    const { isConfirmed } = await Swal.fire({
       title: 'Удалить участок?',
       text: "Это действие нельзя отменить!",
       icon: 'warning',
@@ -389,7 +376,7 @@ export function useCalculator() {
   }
   function addSection(zone) { zone.sections.push({ id: nextId++, title: 'Новый раздел', works: [], materials: [] }); }
   async function removeSection(zone, sIdx) { 
-    const { isConfirmed } = await SkYugSwal.fire({
+    const { isConfirmed } = await Swal.fire({
       title: 'Удалить раздел?',
       icon: 'warning',
       showCancelButton: true,
@@ -407,42 +394,15 @@ export function useCalculator() {
   function addMaterial(section, zone) { section.materials.push({ code: 'М' + codeCounters.value.mat++, name: '', supplier: zone.supplierType || 'ТехноНИКОЛЬ', unit: 'шт', expression: '', qty: 0, price: 0 }); }
   function addExpense() { overheadExpenses.value.push({ name: 'Новый расход', unit: 'ед', qty: 1, price: 0 }); }
 
-  async function addCustomParam(zone) {
-    const { value: name } = await SkYugSwal.fire({
-      title: 'Новая переменная',
-      text: 'Название (например: Длина конька):',
-      input: 'text',
-      showCancelButton: true,
-      confirmButtonText: 'Далее',
-      cancelButtonText: 'Отмена',
-      inputValidator: (value) => {
-        if (!value) return 'Название не может быть пустым!'
-      }
-    });
-
+  function addCustomParam(zone) {
+    const name = prompt('Название переменной (например: Длина конька):');
     if (!name) return;
-
-    const { value: symbol } = await SkYugSwal.fire({
-      title: 'Символ переменной',
-      text: 'Символ для формул (английская буква, например: L):',
-      input: 'text',
-      showCancelButton: true,
-      confirmButtonText: 'Добавить',
-      cancelButtonText: 'Отмена',
-      inputValidator: (value) => {
-        if (!value) return 'Символ не может быть пустым!'
-        if (!/^[a-zA-Z]+$/.test(value)) return 'Используйте только английские буквы!'
-      }
-    });
-
+    let symbol = prompt('Символ для формул (английская буква, например: L):');
     if (!symbol) return;
-    
-    const cleanSymbol = symbol.trim().toUpperCase();
+    symbol = symbol.trim().toUpperCase();
 
     if (!zone.customParams) zone.customParams = [];
-    zone.customParams.push({ name, symbol: cleanSymbol, value: 0 });
-    
-    Toast.fire({ icon: 'success', title: `Переменная ${cleanSymbol} добавлена` });
+    zone.customParams.push({ name, symbol, value: 0 });
   }
 
   const getSectionTotal = (section) => {
