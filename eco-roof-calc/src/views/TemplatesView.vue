@@ -98,6 +98,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getDb } from '../database.js'
+import { alerts } from '../utils/alerts.js'
 
 const templates = ref([])
 const currentTemplate = ref(null)
@@ -132,7 +133,6 @@ const editTemplate = (tmpl) => {
     const rawData = tmpl.данные_json || '{}';
     const parsedData = JSON.parse(rawData);
     
-    
     let sections = [];
     let customParams = [];
     if (Array.isArray(parsedData)) {
@@ -162,6 +162,11 @@ const addMaterial = (section) => section.materials.push({ name: '', unit: 'шт'
 const cancelEdit = () => { currentTemplate.value = null }
 
 const saveTemplate = async () => {
+  if (!currentTemplate.value.название.trim()) {
+    alerts.showWarning('Внимание!', 'Название шаблона не может быть пустым!');
+    return;
+  }
+
   try {
     const db = await getDb()
     
@@ -178,18 +183,28 @@ const saveTemplate = async () => {
     }
     await loadTemplates()
     currentTemplate.value = null
-    alert('Шаблон успешно сохранен!');
-  } catch (error) { console.error(error); alert('Ошибка сохранения!'); }
+    
+    alerts.success('Шаблон успешно сохранен!');
+  } catch (error) { 
+    console.error(error); 
+    alerts.error('Ошибка сохранения!'); 
+  }
 }
 
 const deleteTemplate = async () => {
-  if (!confirm('Точно удалить этот шаблон?')) return
+  const { isConfirmed } = await alerts.confirmDelete('Точно удалить этот шаблон?');
+  if (!isConfirmed) return;
+
   try {
     const db = await getDb()
     await db.execute('DELETE FROM Справочник_шаблонов WHERE идентификатор = $1', [currentTemplate.value.идентификатор])
     await loadTemplates()
     currentTemplate.value = null
-  } catch (error) { console.error(error) }
+    alerts.info('Шаблон удален');
+  } catch (error) { 
+    console.error(error);
+    alerts.error('Ошибка при удалении');
+  }
 }
 </script>
 <style scoped>
