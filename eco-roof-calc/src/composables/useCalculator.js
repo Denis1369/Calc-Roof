@@ -2,30 +2,8 @@ import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { getDb } from '../database.js';
 import { evaluate } from 'mathjs';
-import Swal from 'sweetalert2';
 
-const SkYugSwal = Swal.mixin({
-  background: '#37444B',       
-  color: '#FFFFFF',           
-  confirmButtonColor: '#F29A2E', 
-  cancelButtonColor: '#4A5A63',  
-  borderRadius: '8px',
-});
-
-const Toast = Swal.mixin({
-  toast: true,
-  position: 'top-end',
-  showConfirmButton: false,
-  timer: 3000,
-  timerProgressBar: true,
-  background: '#37444B',
-  color: '#FFFFFF',
-  iconColor: '#F29A2E',
-  didOpen: (toast) => {
-    toast.addEventListener('mouseenter', Swal.stopTimer)
-    toast.addEventListener('mouseleave', Swal.resumeTimer)
-  }
-});
+import { alerts } from '../utils/alerts.js';
 
 export function useCalculator() {
   const route = useRoute(); 
@@ -264,7 +242,7 @@ export function useCalculator() {
 
   async function saveProject() {
     if (!projectName.value) { 
-      SkYugSwal.fire('Внимание!', 'Пожалуйста, укажите название проекта!', 'warning'); 
+      alerts.showWarning('Внимание!', 'Пожалуйста, укажите название проекта!'); 
       return; 
     }
     try {
@@ -272,22 +250,15 @@ export function useCalculator() {
       const projectSnapshot = { vatRate: vatRate.value, estimateZones: estimateZones.value, overheadExpenses: overheadExpenses.value };
       await db.execute('INSERT INTO Сохраненные_сметы (название_объекта, данные_сметы_json) VALUES ($1, $2)', [projectName.value, JSON.stringify(projectSnapshot)]);
       
-      Toast.fire({ icon: 'success', title: 'Смета успешно сохранена!' });
+      alerts.success('Смета успешно сохранена!');
     } catch (error) { 
       console.error('Ошибка сохранения:', error); 
-      Toast.fire({ icon: 'error', title: 'Ошибка при сохранении' });
+      alerts.error('Ошибка при сохранении');
     }
   }
 
   async function loadProject() {
-    const { value: projectId } = await SkYugSwal.fire({
-      title: 'Загрузка сметы',
-      text: 'Введите ID сохраненной сметы:',
-      input: 'text',
-      showCancelButton: true,
-      confirmButtonText: 'Загрузить',
-      cancelButtonText: 'Отмена'
-    });
+    const { value: projectId } = await alerts.prompt('Загрузка сметы', 'Введите ID сохраненной сметы:', 'Загрузить');
 
     if (!projectId) return;
 
@@ -315,9 +286,9 @@ export function useCalculator() {
         projectName.value = result[0].название_объекта;
         recalculateVolumes(); 
         
-        Toast.fire({ icon: 'success', title: 'Смета загружена!' });
+        alerts.success('Смета загружена!');
       } else {
-        SkYugSwal.fire('Не найдено', 'Смета с таким ID не найдена.', 'error');
+        alerts.showError('Не найдено', 'Смета с таким ID не найдена.');
       }
     } catch (error) { 
       console.error('Ошибка загрузки:', error); 
@@ -370,33 +341,18 @@ export function useCalculator() {
   }
 
   async function removeZone(index) { 
-    const { isConfirmed } = await SkYugSwal.fire({
-      title: 'Удалить участок?',
-      text: "Это действие нельзя отменить!",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Да, удалить',
-      cancelButtonText: 'Отмена'
-    });
+    const { isConfirmed } = await alerts.confirmDelete('Удалить участок?');
     
     if (isConfirmed) {
       estimateZones.value.splice(index, 1);
-      Toast.fire({ icon: 'info', title: 'Участок удален' });
+      alerts.info('Участок удален');
     }
   }
 
   function addSection(zone) { zone.sections.push({ id: nextId++, title: 'Новый раздел', works: [], materials: [] }); }
   
   async function removeSection(zone, sIdx) { 
-    const { isConfirmed } = await SkYugSwal.fire({
-      title: 'Удалить раздел?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Да, удалить',
-      cancelButtonText: 'Отмена'
-    });
+    const { isConfirmed } = await alerts.confirmDelete('Удалить раздел?');
 
     if (isConfirmed) {
       zone.sections.splice(sIdx, 1);
@@ -408,33 +364,10 @@ export function useCalculator() {
   function addExpense() { overheadExpenses.value.push({ name: 'Новый расход', unit: 'ед', qty: 1, price: 0 }); }
 
   async function addCustomParam(zone) {
-    const { value: name } = await SkYugSwal.fire({
-      title: 'Новая переменная',
-      text: 'Название (например: Длина конька):',
-      input: 'text',
-      showCancelButton: true,
-      confirmButtonText: 'Далее',
-      cancelButtonText: 'Отмена',
-      inputValidator: (value) => {
-        if (!value) return 'Название не может быть пустым!'
-      }
-    });
-
+    const { value: name } = await alerts.prompt('Новая переменная', 'Название (например: Длина конька):');
     if (!name) return;
 
-    const { value: symbol } = await SkYugSwal.fire({
-      title: 'Символ переменной',
-      text: 'Символ для формул (английская буква, например: L):',
-      input: 'text',
-      showCancelButton: true,
-      confirmButtonText: 'Добавить',
-      cancelButtonText: 'Отмена',
-      inputValidator: (value) => {
-        if (!value) return 'Символ не может быть пустым!'
-        if (!/^[a-zA-Z]+$/.test(value)) return 'Используйте только английские буквы!'
-      }
-    });
-
+    const { value: symbol } = await alerts.promptSymbol('Символ переменной', 'Символ для формул (английская буква, например: L):');
     if (!symbol) return;
     
     const cleanSymbol = symbol.trim().toUpperCase();
@@ -442,7 +375,7 @@ export function useCalculator() {
     if (!zone.customParams) zone.customParams = [];
     zone.customParams.push({ name, symbol: cleanSymbol, value: 0 });
     
-    Toast.fire({ icon: 'success', title: `Переменная ${cleanSymbol} добавлена` });
+    alerts.success(`Переменная ${cleanSymbol} добавлена`);
   }
 
   const getSectionTotal = (section) => {

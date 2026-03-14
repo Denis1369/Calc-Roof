@@ -4,19 +4,16 @@ import { getDb } from '../database.js';
 export function useDirectories() {
   const materials = ref([]);
   const works = ref([]);
-
   
   const searchMaterial = ref('');
   const searchWork = ref('');
   const onlyFavMaterials = ref(false); 
   const onlyFavWorks = ref(false); 
-
   
   const collapsedGroups = ref({});
   const collapsedMatMain = ref({});
   const collapsedMatSub = ref({});
 
-  
   const newMaterial = ref({ 
     главная_категория: '', подкатегория: '', артикул_товара: '', 
     полное_наименование_материала: '', единица_измерения: 'м2', базовая_цена: 0, ссылка: ''
@@ -27,9 +24,6 @@ export function useDirectories() {
     цена_0_300: 0, цена_300_600: 0, цена_600_1000: 0, цена_1000_3000: 0,
     цена_3000_6000: 0, цена_6000_15000: 0, цена_15000_30000: 0, цена_более_30000: 0
   });
-
-  
-  
   
   async function loadData() {
     const db = await getDb();
@@ -49,9 +43,6 @@ export function useDirectories() {
       for (const cat in groupedWorks.value) collapsedGroups.value[cat] = true;
     }
   }
-
-  
-  
   
   const filteredMaterials = computed(() => {
     let list = materials.value;
@@ -109,9 +100,6 @@ export function useDirectories() {
     }
   }
 
-  
-  
-  
   const filteredWorks = computed(() => {
     let list = works.value;
     if (onlyFavWorks.value) list = list.filter(w => w.избранное);
@@ -165,9 +153,6 @@ export function useDirectories() {
       const db = await getDb(); await db.execute('DELETE FROM Справочник_видов_работ WHERE идентификатор = $1', [id]); await loadData();
     }
   }
-
-  
-  
   
   watch([searchMaterial, onlyFavMaterials], () => {
     if (searchMaterial.value.trim().length > 0 || onlyFavMaterials.value) {
