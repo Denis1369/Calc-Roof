@@ -1,71 +1,114 @@
 <template>
-  <div class="eco-container">
-    <header class="header">
-      <h1>Управление справочниками</h1>
-      <p>База материалов и расценок на работы</p>
+  <div class="directories-page">
+    <header class="page-header">
+      <h1 class="ui-title">Управление справочниками</h1>
+      <p class="page-subtitle">База материалов и расценок на работы</p>
     </header>
 
-    <div class="tabs">
-      <button :class="{ active: activeTab === 'materials' }" @click="activeTab = 'materials'">Материалы (Каталог)</button>
-      <button :class="{ active: activeTab === 'works' }" @click="activeTab = 'works'">Работы (Сгруппированные)</button>
+    <div class="tabs-wrap">
+      <div class="tabs">
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'materials' }"
+          @click="activeTab = 'materials'"
+        >
+          Материалы (Каталог)
+        </button>
+
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'works' }"
+          @click="activeTab = 'works'"
+        >
+          Работы (Сгруппированные)
+        </button>
+      </div>
     </div>
 
     <DirectoryMaterialsTab v-if="activeTab === 'materials'" :dir="dir" />
     <DirectoryWorksTab v-if="activeTab === 'works'" :dir="dir" />
-
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
-import { useDirectories } from '../composables/useDirectories.js';
-import DirectoryMaterialsTab from '../components/DirectoryMaterialsTab.vue';
-import DirectoryWorksTab from '../components/DirectoryWorksTab.vue';
+import { ref, reactive, onMounted } from 'vue'
+import { useDirectories } from '../composables/useDirectories.js'
+import DirectoryMaterialsTab from '../components/DirectoryMaterialsTab.vue'
+import DirectoryWorksTab from '../components/DirectoryWorksTab.vue'
 
-const activeTab = ref('materials');
-
-
-const dir = reactive(useDirectories());
+const activeTab = ref('materials')
+const dir = reactive(useDirectories())
 
 onMounted(() => {
-  dir.loadData();
-});
+  dir.loadData()
+})
 </script>
 
 <style scoped>
-.eco-container { 
-  max-width: 1400px; 
-  margin: 0 auto; 
-  padding: 2rem; 
-  font-family: 'Inter', sans-serif; 
+.directories-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
 }
-.header h1 { 
-  color: #FFFFFF; 
-  margin-bottom: 0.5rem; 
+
+.page-header {
+  margin-bottom: 24px;
 }
-.tabs { 
-  display: flex; 
-  gap: 1rem; 
-  margin-bottom: 2rem; 
-  border-bottom: 2px solid #4A5A63; 
-  padding-bottom: 0.5rem; 
+
+.page-subtitle {
+  margin: 10px 0 0;
+  color: var(--text-soft);
+  font-size: 15px;
 }
-.tabs button { 
-  background: none; 
-  border: none; 
-  font-size: 1.1rem; 
-  font-weight: 600; 
-  color: #A0B1BA; 
-  cursor: pointer; 
-  padding: 0.5rem 1rem; 
-  border-radius: 6px; 
-  transition: 0.2s; 
+
+.tabs-wrap {
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border-color);
 }
-.tabs button:hover { 
-  background: rgba(255, 255, 255, 0.05); 
+
+.tabs {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
 }
-.tabs button.active { 
-  color: #F29A2E; 
-  background: rgba(242, 154, 46, 0.1); 
+
+.tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-soft);
+  cursor: pointer;
+  padding: 10px 14px;
+  border-radius: 10px;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.tab-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.tab-btn.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+@media (max-width: 700px) {
+  .directories-page {
+    padding: 16px;
+  }
+
+  .tabs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tab-btn {
+    width: 100%;
+    text-align: left;
+  }
 }
 </style>
