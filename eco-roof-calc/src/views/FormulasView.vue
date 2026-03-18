@@ -36,6 +36,7 @@
             <span class="tag-base" @click="insertToFormula('P')">P (Периметр)</span>
             <span class="tag-base" @click="insertToFormula('A')">A (Аэраторы)</span>
             <span class="tag-base" @click="insertToFormula('ID')">ID (Воронки)</span>
+            <span class="tag-base" @click="insertToFormula('OD')">OD (Парапетные воронки)</span>
           </div>
 
           <p class="section-label mt-3">Коэффициенты из базы:</p>
@@ -70,6 +71,11 @@
         </div>
 
         <div class="form-group">
+          <label class="ui-label">Код формулы:</label>
+          <input v-model="currentFormula.код" class="ui-input" placeholder="Например: PVC_AREA" />
+        </div>
+
+        <div class="form-group">
           <label class="ui-label">Математическое выражение:</label>
           <textarea
             v-model="currentFormula.выражение"
@@ -84,6 +90,8 @@
           <div class="test-inputs">
             <label>S (м2): <input type="number" v-model="testData.S" class="ui-input mini-input" /></label>
             <label>P (м.п): <input type="number" v-model="testData.P" class="ui-input mini-input" /></label>
+            <label>A: <input type="number" v-model="testData.A" class="ui-input mini-input" /></label>
+            <label>ID: <input type="number" v-model="testData.ID" class="ui-input mini-input" /></label>
           </div>
           <div class="test-result">
             Результат: <strong>{{ testResult }}</strong>
@@ -103,27 +111,70 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { evaluate } from 'mathjs'
-import { getDb } from '../database.js'
+import { getDb } from '../infrastructure/db/client'
+import { normalizeKey } from '../shared/utils/normalizeKey'
 
 const formulas = ref([])
 const coefficients = ref([])
 const currentFormula = ref(null)
 const isNew = ref(false)
 
-const testData = ref({ S: 100, P: 40, A: 2, ID: 1 })
+const testData = ref({ S: 100, P: 40, A: 2, ID: 1, OD: 1 })
 
 const searchFormulaQuery = ref('')
 const searchCoefQuery = ref('')
 
 onMounted(async () => {
+  await ensureTables()
   await loadFormulas()
   await loadCoefficients()
 })
 
+async function ensureTables() {
+  const db = await getDb()
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS formulas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      expression TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS coefficients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      normalize_key TEXT NOT NULL UNIQUE,
+      group_name TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      value REAL NOT NULL DEFAULT 0,
+      unit TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+}
+
 async function loadFormulas() {
   try {
     const db = await getDb()
-    formulas.value = await db.select('SELECT * FROM Справочник_формул ORDER BY название_формулы')
+    const rows = await db.select(`
+      SELECT id, code, name, expression, description
+      FROM formulas
+      ORDER BY name, code, id
+    `)
+
+    formulas.value = rows.map((row) => ({
+      идентификатор: row.id,
+      код: row.code,
+      название_формулы: row.name,
+      выражение: row.expression,
+      описание: row.description || ''
+    }))
   } catch (error) {
     console.error(error)
   }
@@ -132,7 +183,18 @@ async function loadFormulas() {
 async function loadCoefficients() {
   try {
     const db = await getDb()
-    coefficients.value = await db.select('SELECT * FROM Справочник_коэффициентов ORDER BY заголовок, название')
+    const rows = await db.select(`
+      SELECT id, group_name, name, value
+      FROM coefficients
+      ORDER BY group_name, name, id
+    `)
+
+    coefficients.value = rows.map((row) => ({
+      идентификатор: row.id,
+      заголовок: row.group_name || '',
+      название: row.name || '',
+      значение: Number(row.value ?? 0)
+    }))
   } catch (error) {
     console.error(error)
   }
@@ -141,19 +203,22 @@ async function loadCoefficients() {
 const filteredFormulas = computed(() => {
   if (!searchFormulaQuery.value) return formulas.value
   const q = searchFormulaQuery.value.toLowerCase()
-  return formulas.value.filter(f => f.название_формулы.toLowerCase().includes(q))
+  return formulas.value.filter((f) =>
+    (f.название_формулы || '').toLowerCase().includes(q) ||
+    (f.код || '').toLowerCase().includes(q)
+  )
 })
 
 const filteredCoefficients = computed(() => {
   if (!searchCoefQuery.value) return coefficients.value
   const q = searchCoefQuery.value.toLowerCase()
-  return coefficients.value.filter(c =>
+  return coefficients.value.filter((c) =>
     (c.название && c.название.toLowerCase().includes(q)) ||
     (c.заголовок && c.заголовок.toLowerCase().includes(q))
   )
 })
 
-const insertToFormula = text => {
+function insertToFormula(text) {
   if (!currentFormula.value.выражение) {
     currentFormula.value.выражение = text
   } else {
@@ -167,61 +232,101 @@ const testResult = computed(() => {
   try {
     let expr = currentFormula.value.выражение
     expr = expr.replace(/\[(.*?)\]/g, (match, paramName) => {
-      const coef = coefficients.value.find(c => c.название === paramName.trim())
+      const coef = coefficients.value.find((c) => c.название === paramName.trim())
       return coef ? coef.значение : 1
     })
 
     const result = evaluate(expr, testData.value)
-    return Number(result.toFixed(3))
-  } catch (error) {
+    return Number(Number(result || 0).toFixed(3))
+  } catch {
     return 'Ошибка синтаксиса'
   }
 })
 
-const addNewFormula = () => {
+function addNewFormula() {
   isNew.value = true
-  currentFormula.value = { название_формулы: '', выражение: '' }
+  currentFormula.value = { название_формулы: '', код: '', выражение: '', описание: '' }
 }
 
-const editFormula = formula => {
+function editFormula(formula) {
   isNew.value = false
   currentFormula.value = { ...formula }
 }
 
-const cancelEdit = () => {
+function cancelEdit() {
   currentFormula.value = null
 }
 
-const saveFormula = async () => {
+function buildFormulaCode() {
+  if (!currentFormula.value?.код?.trim()) {
+    return normalizeKey(currentFormula.value?.название_формулы || `formula_${Date.now()}`)
+      .replace(/_/g, '_')
+      .toUpperCase()
+  }
+
+  return normalizeKey(currentFormula.value.код).replace(/_/g, '_').toUpperCase()
+}
+
+async function saveFormula() {
+  if (!currentFormula.value?.название_формулы?.trim()) {
+    window.alert('Заполните название формулы')
+    return
+  }
+
+  if (!currentFormula.value?.выражение?.trim()) {
+    window.alert('Заполните выражение формулы')
+    return
+  }
+
   try {
     const db = await getDb()
+    const code = buildFormulaCode()
+
     if (isNew.value) {
       await db.execute(
-        'INSERT INTO Справочник_формул (название_формулы, выражение) VALUES ($1, $2)',
-        [currentFormula.value.название_формулы, currentFormula.value.выражение]
+        `INSERT INTO formulas (code, name, expression, description)
+         VALUES ($1, $2, $3, $4)`,
+        [code, currentFormula.value.название_формулы.trim(), currentFormula.value.выражение.trim(), currentFormula.value.описание || '']
       )
     } else {
       await db.execute(
-        'UPDATE Справочник_формул SET название_формулы = $1, выражение = $2 WHERE идентификатор = $3',
-        [currentFormula.value.название_формулы, currentFormula.value.выражение, currentFormula.value.идентификатор]
+        `UPDATE formulas
+         SET code = $1,
+             name = $2,
+             expression = $3,
+             description = $4,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $5`,
+        [
+          code,
+          currentFormula.value.название_формулы.trim(),
+          currentFormula.value.выражение.trim(),
+          currentFormula.value.описание || '',
+          currentFormula.value.идентификатор
+        ]
       )
     }
+
     await loadFormulas()
     currentFormula.value = null
   } catch (error) {
     console.error(error)
+    window.alert('Ошибка при сохранении формулы')
   }
 }
 
-const deleteFormula = async () => {
-  if (!confirm('Точно удалить?')) return
+async function deleteFormula() {
+  if (!currentFormula.value?.идентификатор) return
+  if (!window.confirm('Точно удалить?')) return
+
   try {
     const db = await getDb()
-    await db.execute('DELETE FROM Справочник_формул WHERE идентификатор = $1', [currentFormula.value.идентификатор])
+    await db.execute('DELETE FROM formulas WHERE id = $1', [currentFormula.value.идентификатор])
     await loadFormulas()
     currentFormula.value = null
   } catch (error) {
     console.error(error)
+    window.alert('Ошибка при удалении формулы')
   }
 }
 </script>
@@ -259,203 +364,127 @@ const deleteFormula = async () => {
   overflow-y: auto;
   max-height: calc(100vh - 220px);
   margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
 }
 
 .formula-items li {
-  padding: 12px;
-  border: 1px solid var(--border-color);
-  margin-bottom: 8px;
+  padding: 14px;
   cursor: pointer;
-  border-radius: 10px;
-  background: var(--bg-card);
-  color: var(--text-main);
-  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  border-bottom: 1px solid var(--border-color);
 }
 
-.formula-items li:hover,
+.formula-items li:last-child {
+  border-bottom: none;
+}
+
 .formula-items li.active {
-  background: var(--bg-active);
-  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .visual-formula {
   display: block;
+  margin-top: 6px;
   color: var(--text-soft);
-  font-size: 0.85em;
-  margin-top: 5px;
-  font-weight: 700;
-  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .variables-column {
-  width: 400px;
+  width: 320px;
   flex-shrink: 0;
 }
 
-.variables-panel {
-  padding: 15px;
-}
-
-.variables-panel h3 {
-  margin-top: 0;
-  font-size: 1.1rem;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 10px;
-  margin-bottom: 15px;
-  color: var(--text-main);
-}
-
-.section-label {
-  margin: 0 0 8px 0;
-  font-size: 0.9rem;
-  color: var(--text-soft);
-  font-weight: 700;
-}
-
-.tags-group-base {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 15px;
-}
-
-.tag-base {
-  padding: 8px;
-  background: var(--bg-card-soft);
-  color: var(--text-main);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  cursor: pointer;
-  text-align: center;
-  font-size: 0.85rem;
-  font-weight: 700;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.tag-base:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
+.variables-panel,
+.formula-editor {
+  padding: 18px;
 }
 
 .custom-tags-scroll {
-  max-height: 55vh;
-  overflow-y: auto;
-  padding-right: 5px;
+  max-height: 420px;
+  overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
+.tags-group-base {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-base,
 .tag-custom {
-  padding: 10px 12px;
-  background: var(--bg-card-soft);
-  border: 1px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
   border-radius: 10px;
-  font-size: 0.85rem;
   cursor: pointer;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-  text-align: left;
-  line-height: 1.4;
-  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card-soft);
 }
 
+.tag-base:hover,
 .tag-custom:hover {
-  border-color: var(--accent);
   background: var(--bg-hover);
 }
 
 .coef-category {
-  display: block;
-  font-size: 0.75rem;
   color: var(--accent);
   font-weight: 700;
-  margin-bottom: 2px;
-  text-transform: uppercase;
 }
 
-.formula-editor {
-  flex: 1;
-  padding: 20px;
-  color: var(--text-main);
+.section-label {
+  color: var(--text-soft);
+  font-weight: 700;
+  margin: 14px 0 10px;
 }
 
-.editor-title {
-  margin-top: 0;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 10px;
-  margin-bottom: 20px;
-  color: var(--text-main);
+.mt-3 {
+  margin-top: 18px;
+}
+
+.mb-2 {
+  margin-bottom: 10px;
+}
+
+.mb-3 {
+  margin-bottom: 14px;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .expression-input {
-  font-family: 'Fira Code', monospace;
-  font-size: 1.05rem;
-  color: var(--accent);
-  font-weight: 700;
-  resize: vertical;
-  line-height: 1.5;
+  width: 100%;
+  min-height: 120px;
 }
 
 .tester-block {
-  background: var(--bg-card-soft);
-  padding: 15px;
+  padding: 14px;
   border-radius: 12px;
-  border: 1px solid var(--accent);
-  margin-bottom: 20px;
-}
-
-.tester-block h4 {
-  margin-top: 0;
-  color: var(--accent);
-  margin-bottom: 12px;
+  background: var(--bg-card-soft);
 }
 
 .test-inputs {
   display: flex;
-  gap: 15px;
-  margin-bottom: 10px;
+  gap: 12px;
   flex-wrap: wrap;
-}
-
-.test-inputs label {
-  color: var(--text-main);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  margin: 10px 0;
 }
 
 .mini-input {
   width: 90px;
 }
 
-.test-result {
-  font-size: 1.1em;
-  color: var(--accent);
-  margin-top: 10px;
-  font-weight: 700;
-}
-
 .actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  margin-top: 18px;
   flex-wrap: wrap;
-}
-
-.mb-3 {
-  margin-bottom: 1rem;
-}
-
-.mb-2 {
-  margin-bottom: 0.5rem;
-}
-
-.mt-3 {
-  margin-top: 1.5rem;
 }
 
 .center {
@@ -463,11 +492,8 @@ const deleteFormula = async () => {
 }
 
 .empty-msg {
-  font-size: 0.9rem;
   color: var(--text-soft);
-  font-style: italic;
-  display: block;
-  padding: 10px 0;
+  padding: 14px;
 }
 
 @media (max-width: 1200px) {
@@ -476,28 +502,8 @@ const deleteFormula = async () => {
   }
 
   .formulas-list,
-  .variables-column,
-  .formula-editor {
+  .variables-column {
     width: 100%;
-  }
-
-  .formula-items {
-    max-height: 320px;
-  }
-}
-
-@media (max-width: 700px) {
-  .formulas-view {
-    padding: 16px;
-  }
-
-  .tags-group-base {
-    grid-template-columns: 1fr;
-  }
-
-  .test-inputs {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 </style>

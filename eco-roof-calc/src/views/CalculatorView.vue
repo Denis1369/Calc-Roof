@@ -45,13 +45,26 @@
       <div v-for="(zone, zIdx) in estimateZones" :key="zone.id" class="zone-block page-card">
         <div class="zone-header">
           <input v-model="zone.name" class="zone-title-input" placeholder="Название участка" />
-          <button
-            @click="removeZone(zIdx)"
-            class="btn-icon danger-text hide-on-print"
-            title="Удалить участок"
-          >
-            ✕
-          </button>
+
+          <div class="zone-header-actions hide-on-print">
+            <button
+              v-if="zone.templateMeta?.systemCode"
+              @click="openEditPieModal(zone, zIdx)"
+              class="ui-btn ui-btn-secondary zone-edit-btn"
+              type="button"
+            >
+              ✏️ Редактировать пирог
+            </button>
+
+            <button
+              @click="removeZone(zIdx)"
+              class="btn-icon danger-text"
+              title="Удалить участок"
+              type="button"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         <div class="zone-params-block hide-on-print">
@@ -268,6 +281,15 @@
       </section>
     </div>
 
+    <EditPieModal
+      :is-open="isEditPieModalOpen"
+      :system="editPieSystem"
+      :initial-selected-keys="editPieSelectedKeys"
+      :initial-param-values="editPieParamValues"
+      @close="closeEditPieModal"
+      @submit="applyEditPieModal"
+    />
+
     <datalist id="works-list">
       <option v-for="w in worksDb" :key="w.идентификатор" :value="w.наименование_работы"></option>
     </datalist>
@@ -285,10 +307,13 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useCalculator } from '../composables/useCalculator.js'
 import EstimateTable from '../components/EstimateTable.vue'
-import { applyPendingGeneratedEstimate } from '../utils/templateEstimateBuilder'
+import EditPieModal from '../components/EditPieModal.vue'
+import { applyPendingGeneratedEstimate, buildEstimateFromSystem } from '../utils/templateEstimateBuilder'
+import { getSystemTemplate } from '../application/systems/getSystemTemplate'
+import { toSystemTemplateView } from '../shared/adapters/systemViewAdapter'
 
 const {
   projectName,
@@ -330,6 +355,68 @@ const {
   printEstimate
 } = useCalculator()
 
+const isEditPieModalOpen = ref(false)
+const editPieZoneIndex = ref(null)
+const editPieSystem = ref(null)
+const editPieSelectedKeys = ref([])
+const editPieParamValues = ref({})
+
+async function openEditPieModal(zone, zoneIndex) {
+  const meta = zone?.templateMeta
+  if (!meta?.systemCode) return
+
+  const system = await getSystemTemplate(meta.systemCode)
+  if (!system) return
+
+  editPieSystem.value = toSystemTemplateView(system)
+  editPieZoneIndex.value = zoneIndex
+  editPieSelectedKeys.value = Array.isArray(meta.selectedKeys) ? [...meta.selectedKeys] : []
+  editPieParamValues.value = { ...(meta.paramValues || {}) }
+  isEditPieModalOpen.value = true
+}
+
+function closeEditPieModal() {
+  isEditPieModalOpen.value = false
+  editPieZoneIndex.value = null
+  editPieSystem.value = null
+  editPieSelectedKeys.value = []
+  editPieParamValues.value = {}
+}
+
+async function applyEditPieModal(payload) {
+  if (editPieZoneIndex.value === null || !editPieSystem.value) return
+
+  const rebuilt = await buildEstimateFromSystem(
+    editPieSystem.value,
+    payload.selectedKeys || [],
+    payload.paramValues || {}
+  )
+
+  const newZone = rebuilt?.estimateZones?.[0]
+  if (!newZone) {
+    closeEditPieModal()
+    return
+  }
+
+  const currentZone = estimateZones.value[editPieZoneIndex.value]
+  if (!currentZone) {
+    closeEditPieModal()
+    return
+  }
+
+  currentZone.sections = newZone.sections || []
+  currentZone.roofParams = newZone.roofParams || currentZone.roofParams
+  currentZone.customParams = newZone.customParams || []
+  currentZone.templateMeta = newZone.templateMeta || null
+
+  if (!currentZone.name || currentZone.name.startsWith('Монтаж системы:')) {
+    currentZone.name = newZone.name || currentZone.name
+  }
+
+  recalculateVolumes()
+  closeEditPieModal()
+}
+
 onMounted(async () => {
   await loadDatabases()
 
@@ -348,7 +435,7 @@ onUnmounted(() => {
 
 <style scoped>
 .calculator-view {
-  max-width: 1400px;
+  max-width: 80%;
   margin: 0 auto;
   padding: 20px;
 }
@@ -984,4 +1071,15 @@ input::-webkit-calendar-picker-indicator {
 input::-webkit-list-button {
   display: none !important;
 }
+
+.zone-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zone-edit-btn {
+  white-space: nowrap;
+}
+
 </style>

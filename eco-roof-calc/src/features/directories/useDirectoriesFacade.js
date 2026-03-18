@@ -13,6 +13,9 @@ const FAV_MATERIALS_KEY = 'eco_roof_fav_materials'
 const FAV_WORKS_KEY = 'eco_roof_fav_works'
 const ARTICLE_PREFIX = 'ARTICLE:'
 
+const expandedMaterials = ref({})
+const newVariantDrafts = ref({})
+
 function loadIds(key) {
   try {
     const raw = localStorage.getItem(key)
@@ -20,6 +23,133 @@ function loadIds(key) {
     return Array.isArray(parsed) ? parsed.map(Number).filter(Number.isFinite) : []
   } catch {
     return []
+  }
+}
+
+function toggleMaterialVariants(materialId) {
+  expandedMaterials.value = {
+    ...expandedMaterials.value,
+    [materialId]: !expandedMaterials.value[materialId]
+  }
+}
+
+function ensureVariantDraft(materialId) {
+  if (!newVariantDrafts.value[materialId]) {
+    newVariantDrafts.value[materialId] = {
+      variant_label: '',
+      sku: '',
+      thickness_mm: null,
+      width_mm: null,
+      height_mm: null,
+      density: null,
+      profile_name: '',
+      price: 0,
+      variant_type: 'option',
+      is_default: 0,
+      is_active: 1,
+      extra_json: {}
+    }
+  }
+
+  return newVariantDrafts.value[materialId]
+}
+
+async function addVariant(materialRow) {
+  loading.value = true
+  error.value = ''
+
+  try {
+    const draft = ensureVariantDraft(materialRow.идентификатор)
+
+    const payload = materialRowToPayload(materialRow)
+    payload.variants = [
+      ...(payload.variants || []),
+      {
+        ...draft,
+        price: Number(draft.price || 0)
+      }
+    ]
+
+    await saveMaterialAction(payload)
+
+    newVariantDrafts.value[materialRow.идентификатор] = {
+      variant_label: '',
+      sku: '',
+      thickness_mm: null,
+      width_mm: null,
+      height_mm: null,
+      density: null,
+      profile_name: '',
+      price: 0,
+      variant_type: 'option',
+      is_default: 0,
+      is_active: 1,
+      extra_json: {}
+    }
+
+    await loadData()
+  } catch (err) {
+    console.error(err)
+    error.value = err?.message || 'Не удалось добавить вариант'
+    throw err
+  } finally {
+    loading.value = false
+  }
+}
+
+async function updateVariant(materialRow, variantRow) {
+  loading.value = true
+  error.value = ''
+
+  try {
+    const payload = materialRowToPayload(materialRow)
+    payload.variants = (payload.variants || []).map((item) =>
+      Number(item.id) === Number(variantRow.id)
+        ? {
+            ...item,
+            variant_label: variantRow.variant_label || '',
+            sku: variantRow.sku || '',
+            thickness_mm: variantRow.thickness_mm ?? null,
+            width_mm: variantRow.width_mm ?? null,
+            height_mm: variantRow.height_mm ?? null,
+            density: variantRow.density ?? null,
+            profile_name: variantRow.profile_name || '',
+            price: Number(variantRow.price || 0),
+            is_default: Number(variantRow.is_default ?? 0),
+            is_active: Number(variantRow.is_active ?? 1)
+          }
+        : item
+    )
+
+    await saveMaterialAction(payload)
+    await loadData()
+  } catch (err) {
+    console.error(err)
+    error.value = err?.message || 'Не удалось обновить вариант'
+    throw err
+  } finally {
+    loading.value = false
+  }
+}
+
+async function deleteVariant(materialRow, variantId) {
+  loading.value = true
+  error.value = ''
+
+  try {
+    const payload = materialRowToPayload(materialRow)
+    payload.variants = (payload.variants || []).filter(
+      (item) => Number(item.id) !== Number(variantId)
+    )
+
+    await saveMaterialAction(payload)
+    await loadData()
+  } catch (err) {
+    console.error(err)
+    error.value = err?.message || 'Не удалось удалить вариант'
+    throw err
+  } finally {
+    loading.value = false
   }
 }
 
@@ -39,7 +169,14 @@ function defaultMaterialForm() {
     бренд: '',
     модель: '',
     тип_материала: '',
-    базовое_наименование: ''
+    базовое_наименование: '',
+
+    вариант: '',
+    толщина_мм: null,
+    ширина_мм: null,
+    высота_мм: null,
+    плотность: null,
+    профиль: ''
   }
 }
 
@@ -56,6 +193,38 @@ function defaultWorkForm() {
     цена_6000_15000: 0,
     цена_15000_30000: 0,
     цена_более_30000: 0
+  }
+}
+
+function buildInitialVariantFromForm(form) {
+  const hasAnyVariantField =
+    `${form.артикул_товара || ''}`.trim() ||
+    `${form.вариант || ''}`.trim() ||
+    form.толщина_мм !== null ||
+    form.ширина_мм !== null ||
+    form.высота_мм !== null ||
+    form.плотность !== null ||
+    `${form.профиль || ''}`.trim()
+
+  if (!hasAnyVariantField) {
+    return null
+  }
+
+  return {
+    variant_label:
+      `${form.вариант || ''}`.trim() ||
+      `${form.полное_наименование_материала || ''}`.trim(),
+    sku: `${form.артикул_товара || ''}`.trim(),
+    thickness_mm: form.толщина_мм ?? null,
+    width_mm: form.ширина_мм ?? null,
+    height_mm: form.высота_мм ?? null,
+    density: form.плотность ?? null,
+    profile_name: `${form.профиль || ''}`.trim(),
+    price: Number(form.базовая_цена || 0),
+    variant_type: 'option',
+    is_default: 1,
+    is_active: 1,
+    extra_json: {}
   }
 }
 
@@ -101,6 +270,11 @@ function buildPriceTiersFromLegacyWork(work) {
 
 function materialRowToPayload(materialRow) {
   const raw = materialRow.raw || {}
+  const existingVariants = Array.isArray(materialRow.variants)
+    ? materialRow.variants
+    : Array.isArray(raw.variants)
+      ? raw.variants
+      : []
 
   return {
     id: materialRow.идентификатор || null,
@@ -118,7 +292,22 @@ function materialRowToPayload(materialRow) {
     unit: materialRow.единица_измерения || '',
     base_price: Number(materialRow.базовая_цена || 0),
     source_url: materialRow.ссылка || '',
-    notes: mergeArticleIntoNotes(raw.notes || '', materialRow.артикул_товара || '')
+    notes: stripArticleFromNotes(raw.notes || ''),
+    variants: existingVariants.map((variant) => ({
+      id: variant.id || null,
+      variant_label: variant.variant_label || '',
+      sku: variant.sku || '',
+      thickness_mm: variant.thickness_mm ?? null,
+      width_mm: variant.width_mm ?? null,
+      height_mm: variant.height_mm ?? null,
+      density: variant.density ?? null,
+      profile_name: variant.profile_name || '',
+      price: Number(variant.price || 0),
+      variant_type: variant.variant_type || 'option',
+      is_default: Number(variant.is_default ?? 0),
+      is_active: Number(variant.is_active ?? 1),
+      extra_json: variant.extra_json || {}
+    }))
   }
 }
 
@@ -138,8 +327,11 @@ function workRowToPayload(workRow) {
 function enrichMaterialRows(materials, favoriteIds) {
   return materials.map((material) => {
     const row = toLegacyMaterialRow(material)
-    row.артикул_товара = extractArticleFromNotes(material.notes || '')
+
+    row.варианты = Array.isArray(material.variants) ? material.variants : []
+    row.количество_вариантов = row.варианты.length
     row.избранное = favoriteIds.includes(Number(row.идентификатор)) ? 1 : 0
+
     return row
   })
 }
@@ -304,7 +496,26 @@ export function useDirectoriesFacade() {
     error.value = ''
 
     try {
-      await saveMaterialAction(materialRowToPayload(newMaterial.value))
+      const initialVariant = buildInitialVariantFromForm(newMaterial.value)
+
+      await saveMaterialAction({
+        category: newMaterial.value.главная_категория || '',
+        subcategory: newMaterial.value.подкатегория || '',
+        base_name:
+          newMaterial.value.базовое_наименование ||
+          newMaterial.value.полное_наименование_материала ||
+          '',
+        display_name: newMaterial.value.полное_наименование_материала || '',
+        brand: newMaterial.value.бренд || '',
+        model: newMaterial.value.модель || '',
+        material_type: newMaterial.value.тип_материала || '',
+        unit: newMaterial.value.единица_измерения || '',
+        base_price: Number(newMaterial.value.базовая_цена || 0),
+        source_url: newMaterial.value.ссылка || '',
+        notes: '',
+        variants: initialVariant ? [initialVariant] : []
+      })
+
       newMaterial.value = defaultMaterialForm()
       await loadData()
     } catch (err) {
@@ -498,6 +709,14 @@ export function useDirectoriesFacade() {
 
     toggleGroup,
     toggleMatMain,
-    toggleMatSub
+    toggleMatSub,
+
+    expandedMaterials,
+    newVariantDrafts,
+    toggleMaterialVariants,
+    ensureVariantDraft,
+    addVariant,
+    updateVariant,
+    deleteVariant,
   }
 }

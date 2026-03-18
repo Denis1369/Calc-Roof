@@ -27,11 +27,11 @@
           </div>
 
           <div class="input-group">
-            <label class="ui-label">Артикул товара *</label>
+            <label class="ui-label">Базовое наименование</label>
             <input
-              v-model="dir.newMaterial.артикул_товара"
+              v-model="dir.newMaterial.базовое_наименование"
               type="text"
-              required
+              placeholder="Например: ПВХ-мембрана"
               class="ui-input"
             />
           </div>
@@ -72,6 +72,38 @@
         </div>
 
         <div class="row-basic">
+          <div class="input-group">
+            <label class="ui-label">Бренд</label>
+            <input
+              v-model="dir.newMaterial.бренд"
+              type="text"
+              placeholder="Например: ТехноНИКОЛЬ"
+              class="ui-input"
+            />
+          </div>
+
+          <div class="input-group">
+            <label class="ui-label">Модель</label>
+            <input
+              v-model="dir.newMaterial.модель"
+              type="text"
+              placeholder="Например: LOGICROOF"
+              class="ui-input"
+            />
+          </div>
+
+          <div class="input-group">
+            <label class="ui-label">Тип материала</label>
+            <input
+              v-model="dir.newMaterial.тип_материала"
+              type="text"
+              placeholder="Например: ПВХ-мембрана"
+              class="ui-input"
+            />
+          </div>
+        </div>
+
+        <div class="row-basic">
           <div class="input-group link-group">
             <label class="ui-label">Ссылка на сайт (URL)</label>
             <input
@@ -81,9 +113,90 @@
               class="ui-input"
             />
           </div>
+        </div>
 
-          <div class="button-group">
-            <button type="submit" class="ui-btn ui-btn-success w-100">+ Добавить материал</button>
+        <div class="variant-card ui-card-soft">
+          <div class="variant-card-header">
+            <h4 class="variant-title">Первый вариант материала</h4>
+            <span class="variant-hint">Необязательно, но рекомендуется заполнить сразу</span>
+          </div>
+
+          <div class="row-basic">
+            <div class="input-group">
+              <label class="ui-label">Название варианта</label>
+              <input
+                v-model="dir.newMaterial.вариант"
+                type="text"
+                placeholder="Например: 1.2 мм / серый"
+                class="ui-input"
+              />
+            </div>
+
+            <div class="input-group">
+              <label class="ui-label">Артикул</label>
+              <input
+                v-model="dir.newMaterial.артикул_товара"
+                type="text"
+                placeholder="SKU / артикул"
+                class="ui-input"
+              />
+            </div>
+
+            <div class="input-group short-input">
+              <label class="ui-label">Толщина, мм</label>
+              <input
+                v-model.number="dir.newMaterial.толщина_мм"
+                type="number"
+                step="0.01"
+                class="ui-input"
+              />
+            </div>
+
+            <div class="input-group short-input">
+              <label class="ui-label">Ширина, мм</label>
+              <input
+                v-model.number="dir.newMaterial.ширина_мм"
+                type="number"
+                step="0.01"
+                class="ui-input"
+              />
+            </div>
+          </div>
+
+          <div class="row-basic">
+            <div class="input-group short-input">
+              <label class="ui-label">Высота, мм</label>
+              <input
+                v-model.number="dir.newMaterial.высота_мм"
+                type="number"
+                step="0.01"
+                class="ui-input"
+              />
+            </div>
+
+            <div class="input-group short-input">
+              <label class="ui-label">Плотность</label>
+              <input
+                v-model.number="dir.newMaterial.плотность"
+                type="number"
+                step="0.01"
+                class="ui-input"
+              />
+            </div>
+
+            <div class="input-group">
+              <label class="ui-label">Профиль</label>
+              <input
+                v-model="dir.newMaterial.профиль"
+                type="text"
+                placeholder="Например: профлист / гладкий"
+                class="ui-input"
+              />
+            </div>
+
+            <div class="button-group">
+              <button type="submit" class="ui-btn ui-btn-success w-100">+ Добавить материал</button>
+            </div>
           </div>
         </div>
       </form>
@@ -112,128 +225,421 @@
           <thead>
             <tr>
               <th style="width: 40px; min-width: 40px;">⭐</th>
-              <th :style="{ width: matColWidths.id + 'px', minWidth: matColWidths.id + 'px' }">
-                ID
-                <div class="resizer" @mousedown.stop="startResize($event, 'id')"></div>
+
+              <th :style="{ width: matColWidths.subcategory + 'px', minWidth: matColWidths.subcategory + 'px' }">
+                Подкатегория
+                <div class="resizer" @mousedown.stop="startResize($event, 'subcategory')"></div>
               </th>
-              <th :style="{ width: matColWidths.article + 'px', minWidth: matColWidths.article + 'px' }">
-                Артикул
-                <div class="resizer" @mousedown.stop="startResize($event, 'article')"></div>
-              </th>
+
               <th :style="{ width: matColWidths.name + 'px', minWidth: matColWidths.name + 'px' }">
                 Наименование
                 <div class="resizer" @mousedown.stop="startResize($event, 'name')"></div>
               </th>
+
               <th :style="{ width: matColWidths.unit + 'px', minWidth: matColWidths.unit + 'px' }">
                 Ед.
                 <div class="resizer" @mousedown.stop="startResize($event, 'unit')"></div>
               </th>
+
               <th :style="{ width: matColWidths.price + 'px', minWidth: matColWidths.price + 'px' }">
-                Цена
+                Баз. цена
                 <div class="resizer" @mousedown.stop="startResize($event, 'price')"></div>
               </th>
+
+              <th :style="{ width: matColWidths.variants + 'px', minWidth: matColWidths.variants + 'px' }">
+                Варианты
+                <div class="resizer" @mousedown.stop="startResize($event, 'variants')"></div>
+              </th>
+
               <th :style="{ width: matColWidths.actions + 'px', minWidth: matColWidths.actions + 'px' }"></th>
             </tr>
           </thead>
 
           <tbody>
-            <template v-for="(subGroups, mainCat) in dir.groupedMaterials" :key="mainCat">
-              <tr class="group-header mat-main-header" @click="dir.toggleMatMain(mainCat)">
-                <td colspan="8">
-                  <span class="toggle-icon">{{ dir.collapsedMatMain[mainCat] ? '▶' : '▼' }}</span>
-                  {{ mainCat }}
-                </td>
-              </tr>
+            <tr
+              v-for="mat in filteredMaterials"
+              :key="mat.идентификатор"
+              :class="{ 'is-fav': mat.избранное }"
+            >
+              <td class="center">
+                <button @click="dir.toggleFavMaterial(mat)" class="btn-fav" type="button">
+                  {{ mat.избранное ? '⭐' : '☆' }}
+                </button>
+              </td>
 
-              <template v-if="!dir.collapsedMatMain[mainCat]">
-                <template v-for="(items, subCat) in subGroups" :key="mainCat + subCat">
-                  <tr class="group-header mat-sub-header" @click="dir.toggleMatSub(mainCat, subCat)">
-                    <td colspan="8">
-                      <span class="toggle-icon">{{ dir.collapsedMatSub[mainCat + '_' + subCat] ? '▶' : '▼' }}</span>
-                      {{ subCat }}
-                      <span class="group-count">({{ items.length }} шт)</span>
-                    </td>
-                  </tr>
+              <td>
+                <input
+                  v-model="mat.подкатегория"
+                  @change="dir.updateMaterial(mat)"
+                  class="cell-input"
+                />
+              </td>
 
-                  <template v-if="!dir.collapsedMatSub[mainCat + '_' + subCat]">
-                    <tr v-for="mat in items" :key="mat.идентификатор" :class="{ 'is-fav': mat.избранное }">
-                      <td class="center">
-                        <button @click="dir.toggleFavMaterial(mat)" class="btn-fav">
-                          {{ mat.избранное ? '⭐' : '☆' }}
-                        </button>
-                      </td>
+              <td>
+                <input
+                  v-model="mat.полное_наименование_материала"
+                  @change="dir.updateMaterial(mat)"
+                  class="cell-input text-left"
+                />
+              </td>
 
-                      <td class="center text-muted">{{ mat.идентификатор }}</td>
+              <td class="center">
+                <input
+                  v-model="mat.единица_измерения"
+                  @change="dir.updateMaterial(mat)"
+                  class="cell-input center"
+                />
+              </td>
 
-                      <td>
-                        <input
-                          v-model="mat.артикул_товара"
-                          @change="dir.updateMaterial(mat)"
-                          class="cell-input article"
-                        />
-                      </td>
+              <td>
+                <input
+                  type="number"
+                  v-model.number="mat.базовая_цена"
+                  @change="dir.updateMaterial(mat)"
+                  class="cell-input right bold"
+                  step="0.01"
+                />
+              </td>
 
-                      <td>
-                        <input
-                          v-model="mat.полное_наименование_материала"
-                          @change="dir.updateMaterial(mat)"
-                          class="cell-input text-left"
-                        />
-                      </td>
+              <td class="center">
+                <button
+                  @click="openVariantsModal(mat)"
+                  class="ui-btn ui-btn-soft btn-variants"
+                  type="button"
+                >
+                  Открыть ({{ mat.количество_вариантов || 0 }})
+                </button>
+              </td>
 
-                      <td class="center">
-                        <input
-                          v-model="mat.единица_измерения"
-                          @change="dir.updateMaterial(mat)"
-                          class="cell-input center"
-                        />
-                      </td>
+              <td class="center">
+                <button
+                  @click="dir.deleteMaterial(mat.идентификатор)"
+                  class="btn-delete"
+                  title="Удалить"
+                  type="button"
+                >
+                  🗑️
+                </button>
+              </td>
+            </tr>
 
-                      <td>
-                        <input
-                          type="number"
-                          v-model.number="mat.базовая_цена"
-                          @change="dir.updateMaterial(mat)"
-                          class="cell-input right bold"
-                          step="0.01"
-                        />
-                      </td>
-
-                      <td class="center">
-                        <button @click="dir.deleteMaterial(mat.идентификатор)" class="btn-delete" title="Удалить">
-                          🗑️
-                        </button>
-                      </td>
-                    </tr>
-                  </template>
-                </template>
-              </template>
-            </template>
-
-            <tr v-if="Object.keys(dir.groupedMaterials).length === 0">
-              <td colspan="8" class="center empty-message">По вашему запросу ничего не найдено</td>
+            <tr v-if="filteredMaterials.length === 0">
+              <td colspan="7" class="center empty-message">По вашему запросу ничего не найдено</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
+
+    <div
+      v-if="selectedMaterial"
+      class="modal-overlay"
+      @click.self="closeVariantsModal"
+    >
+      <div class="modal-window">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title">Варианты материала</h3>
+            <p class="modal-subtitle">
+              {{ selectedMaterial.полное_наименование_материала }}
+            </p>
+          </div>
+
+          <button class="modal-close" type="button" @click="closeVariantsModal">✕</button>
+        </div>
+
+        <div class="modal-meta">
+          <span class="meta-chip">
+            Подкатегория: {{ selectedMaterial.подкатегория || '—' }}
+          </span>
+          <span class="meta-chip">
+            Всего вариантов: {{ selectedMaterial.варианты?.length || 0 }}
+          </span>
+        </div>
+
+        <div class="modal-table-scroll">
+          <table class="modern-table modal-table">
+            <thead>
+              <tr>
+                <th>Вариант</th>
+                <th>Артикул</th>
+                <th>Толщина, мм</th>
+                <th>Ширина, мм</th>
+                <th>Высота, мм</th>
+                <th>Плотность</th>
+                <th>Профиль</th>
+                <th>Цена</th>
+                <th></th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr v-for="variant in selectedMaterial.варианты" :key="variant.id">
+                <td>
+                  <input
+                    v-model="variant.variant_label"
+                    @change="dir.updateVariant(selectedMaterial, variant)"
+                    class="cell-input"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model="variant.sku"
+                    @change="dir.updateVariant(selectedMaterial, variant)"
+                    class="cell-input article"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model.number="variant.thickness_mm"
+                    @change="dir.updateVariant(selectedMaterial, variant)"
+                    type="number"
+                    step="0.01"
+                    class="cell-input right"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model.number="variant.width_mm"
+                    @change="dir.updateVariant(selectedMaterial, variant)"
+                    type="number"
+                    step="0.01"
+                    class="cell-input right"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model.number="variant.height_mm"
+                    @change="dir.updateVariant(selectedMaterial, variant)"
+                    type="number"
+                    step="0.01"
+                    class="cell-input right"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model.number="variant.density"
+                    @change="dir.updateVariant(selectedMaterial, variant)"
+                    type="number"
+                    step="0.01"
+                    class="cell-input right"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model="variant.profile_name"
+                    @change="dir.updateVariant(selectedMaterial, variant)"
+                    class="cell-input"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model.number="variant.price"
+                    @change="dir.updateVariant(selectedMaterial, variant)"
+                    type="number"
+                    step="0.01"
+                    class="cell-input right bold"
+                  />
+                </td>
+
+                <td class="center">
+                  <button
+                    @click="dir.deleteVariant(selectedMaterial, variant.id)"
+                    class="btn-delete"
+                    type="button"
+                  >
+                    🗑️
+                  </button>
+                </td>
+              </tr>
+
+              <tr class="new-variant-row">
+                <td>
+                  <input
+                    v-model="variantDraft.variant_label"
+                    class="cell-input"
+                    placeholder="Новый вариант"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model="variantDraft.sku"
+                    class="cell-input article"
+                    placeholder="Артикул"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model.number="variantDraft.thickness_mm"
+                    type="number"
+                    step="0.01"
+                    class="cell-input right"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model.number="variantDraft.width_mm"
+                    type="number"
+                    step="0.01"
+                    class="cell-input right"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model.number="variantDraft.height_mm"
+                    type="number"
+                    step="0.01"
+                    class="cell-input right"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model.number="variantDraft.density"
+                    type="number"
+                    step="0.01"
+                    class="cell-input right"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model="variantDraft.profile_name"
+                    class="cell-input"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    v-model.number="variantDraft.price"
+                    type="number"
+                    step="0.01"
+                    class="cell-input right bold"
+                  />
+                </td>
+
+                <td class="center">
+                  <button
+                    @click="dir.addVariant(selectedMaterial)"
+                    class="ui-btn ui-btn-success btn-add-variant"
+                    type="button"
+                  >
+                    +
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="modal-footer">
+          <button class="ui-btn ui-btn-secondary" type="button" @click="closeVariantsModal">
+            Закрыть
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
-defineProps({
+const props = defineProps({
   dir: { type: Object, required: true }
 })
 
+const dir = props.dir
+
+const selectedMaterial = ref(null)
+
+const variantDraft = computed(() => {
+  if (!selectedMaterial.value) return null
+  return dir.ensureVariantDraft(selectedMaterial.value.идентификатор)
+})
+
+const filteredMaterials = computed(() => {
+  const search = `${dir.searchMaterial || ''}`.toLowerCase().trim()
+
+  return [...(dir.materialsDb || [])]
+    .filter((item) => {
+      if (dir.onlyFavMaterials && !item.избранное) {
+        return false
+      }
+
+      if (!search) {
+        return true
+      }
+
+      return [
+        item.главная_категория,
+        item.подкатегория,
+        item.полное_наименование_материала,
+        item.базовое_наименование
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(search)
+    })
+    .sort((a, b) => {
+      const aKey = [
+        a.подкатегория || '',
+        a.полное_наименование_материала || ''
+      ].join('|')
+
+      const bKey = [
+        b.подкатегория || '',
+        b.полное_наименование_материала || ''
+      ].join('|')
+
+      return aKey.localeCompare(bKey, 'ru')
+    })
+})
+
+watch(
+  () => dir.materialsDb,
+  (rows) => {
+    if (!selectedMaterial.value) return
+
+    const updated = (rows || []).find(
+      (item) => Number(item.идентификатор) === Number(selectedMaterial.value.идентификатор)
+    )
+
+    if (updated) {
+      selectedMaterial.value = updated
+    } else {
+      selectedMaterial.value = null
+    }
+  },
+  { deep: true }
+)
+
+function openVariantsModal(material) {
+  selectedMaterial.value = material
+  dir.ensureVariantDraft(material.идентификатор)
+}
+
+function closeVariantsModal() {
+  selectedMaterial.value = null
+}
+
 const matColWidths = reactive({
-  id: 60,
-  article: 150,
-  name: 350,
-  unit: 80,
-  price: 100,
-  link: 150,
+  subcategory: 240,
+  name: 620,
+  unit: 90,
+  price: 130,
+  variants: 160,
   actions: 60
 })
 
@@ -254,7 +660,7 @@ function startResize(e, headerKey) {
 
 function onMouseMove(e) {
   if (!isResizing) return
-  matColWidths[currentHeader] = Math.max(50, startWidth + (e.clientX - startX))
+  matColWidths[currentHeader] = Math.max(60, startWidth + (e.clientX - startX))
 }
 
 function onMouseUp() {
@@ -326,6 +732,32 @@ function onMouseUp() {
 
 .w-100 {
   width: 100%;
+}
+
+.variant-card {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.variant-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.variant-title {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-main);
+}
+
+.variant-hint {
+  color: var(--text-soft);
+  font-size: 13px;
 }
 
 .table-toolbar {
@@ -407,57 +839,6 @@ function onMouseUp() {
   background: var(--bg-card);
 }
 
-.group-header {
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-
-.group-header td {
-  font-weight: 700;
-  font-size: 1.02rem;
-  padding: 0.85rem 1rem !important;
-  border: none !important;
-  user-select: none;
-  border-left: 4px solid var(--accent) !important;
-}
-
-.mat-main-header td {
-  background: var(--bg-card-soft) !important;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--accent);
-  border-bottom: 1px solid var(--border-color) !important;
-}
-
-.mat-main-header:hover td {
-  background: var(--bg-hover) !important;
-}
-
-.mat-sub-header td {
-  background: color-mix(in srgb, var(--bg-card-soft) 75%, var(--bg-card) 25%) !important;
-  padding-left: 2.5rem !important;
-  color: var(--text-main);
-  font-weight: 500;
-}
-
-.mat-sub-header:hover td {
-  background: var(--bg-hover) !important;
-}
-
-.toggle-icon {
-  display: inline-block;
-  width: 20px;
-  font-size: 0.9rem;
-  color: var(--text-soft);
-}
-
-.group-count {
-  font-size: 0.85rem;
-  color: var(--text-soft);
-  margin-left: 10px;
-  font-weight: 400;
-}
-
 .cell-input {
   width: 100%;
   height: 100%;
@@ -522,6 +903,10 @@ function onMouseUp() {
   transform: scale(1.12);
 }
 
+.btn-variants {
+  white-space: nowrap;
+}
+
 .empty-message {
   padding: 2rem !important;
   color: var(--text-soft);
@@ -562,8 +947,117 @@ function onMouseUp() {
   text-align: left;
 }
 
-.text-muted {
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 2000;
+}
+
+.modal-window {
+  width: min(1400px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px var(--shadow-color);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-card-soft);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 22px;
+  color: var(--text-main);
+}
+
+.modal-subtitle {
+  margin: 6px 0 0;
   color: var(--text-soft);
+  font-size: 14px;
+}
+
+.modal-close {
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-soft);
+  transition: color var(--transition-fast), transform var(--transition-fast);
+}
+
+.modal-close:hover {
+  color: var(--danger);
+  transform: scale(1.08);
+}
+
+.modal-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 22px 0;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border-color);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.modal-table-scroll {
+  overflow: auto;
+  padding: 16px 22px;
+}
+
+.modal-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.modal-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.new-variant-row td {
+  background: color-mix(in srgb, var(--bg-card-soft) 65%, var(--bg-card) 35%);
+}
+
+.btn-add-variant {
+  min-width: 42px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 22px 20px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-card-soft);
 }
 
 input[type='number']::-webkit-outer-spin-button,
@@ -578,12 +1072,13 @@ input[type='number'] {
   text-align: right;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
   .row-basic {
     flex-direction: column;
     align-items: stretch;
   }
 
+  .variant-card-header,
   .table-toolbar {
     flex-direction: column;
     align-items: stretch;
@@ -602,6 +1097,14 @@ input[type='number'] {
   .name-group,
   .short-input {
     flex: none;
+  }
+
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal-window {
+    max-height: 95vh;
   }
 }
 </style>

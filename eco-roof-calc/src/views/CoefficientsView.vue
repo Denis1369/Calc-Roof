@@ -53,20 +53,49 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { getDb } from '../database.js'
-import { alerts } from '../utils/alerts.js'
+import { getDb } from '../infrastructure/db/client'
+import { normalizeKey } from '../shared/utils/normalizeKey'
 
 const coefficients = ref([])
 const searchQuery = ref('')
 
 onMounted(async () => {
+  await ensureTable()
   await loadCoefficients()
 })
+
+async function ensureTable() {
+  const db = await getDb()
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS coefficients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      normalize_key TEXT NOT NULL UNIQUE,
+      group_name TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      value REAL NOT NULL DEFAULT 0,
+      unit TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+}
 
 async function loadCoefficients() {
   try {
     const db = await getDb()
-    coefficients.value = await db.select('SELECT * FROM Справочник_коэффициентов ORDER BY заголовок, название')
+    const rows = await db.select(`
+      SELECT id, group_name, name, value
+      FROM coefficients
+      ORDER BY group_name, name, id
+    `)
+
+    coefficients.value = rows.map((row) => ({
+      идентификатор: row.id,
+      заголовок: row.group_name || '',
+      название: row.name || '',
+      значение: Number(row.value ?? 0)
+    }))
   } catch (error) {
     console.error('Ошибка загрузки коэффициентов:', error)
   }
@@ -75,63 +104,75 @@ async function loadCoefficients() {
 const filteredCoefficients = computed(() => {
   if (!searchQuery.value) return coefficients.value
   const q = searchQuery.value.toLowerCase()
-  return coefficients.value.filter(c =>
+  return coefficients.value.filter((c) =>
     (c.название && c.название.toLowerCase().includes(q)) ||
     (c.заголовок && c.заголовок.toLowerCase().includes(q))
   )
 })
 
-const addCoefficient = () => {
-  coefficients.value.unshift({ tempId: Date.now(), заголовок: '', название: '', значение: 1 })
+function addCoefficient() {
+  coefficients.value.unshift({
+    tempId: Date.now(),
+    заголовок: '',
+    название: '',
+    значение: 1
+  })
   searchQuery.value = ''
 }
 
-const saveCoefficient = async coef => {
-  if (!coef.название) {
-    alerts.showWarning('Внимание', 'Заполните название коэффициента!')
+async function saveCoefficient(coef) {
+  if (!coef.название?.trim()) {
+    window.alert('Заполните название коэффициента')
     return
   }
 
   try {
     const db = await getDb()
+    const keyBase = coef.название?.trim() || `coef_${Date.now()}`
+    const normalize = normalizeKey(`${coef.заголовок || ''}_${keyBase}`)
+
     if (coef.идентификатор) {
       await db.execute(
-        'UPDATE Справочник_коэффициентов SET заголовок = $1, название = $2, значение = $3 WHERE идентификатор = $4',
-        [coef.заголовок, coef.название, coef.значение, coef.идентификатор]
+        `UPDATE coefficients
+         SET normalize_key = $1,
+             group_name = $2,
+             name = $3,
+             value = $4,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $5`,
+        [normalize, coef.заголовок || '', coef.название.trim(), Number(coef.значение || 0), coef.идентификатор]
       )
     } else {
       await db.execute(
-        'INSERT INTO Справочник_коэффициентов (заголовок, название, значение) VALUES ($1, $2, $3)',
-        [coef.заголовок, coef.название, coef.значение]
+        `INSERT INTO coefficients (normalize_key, group_name, name, value)
+         VALUES ($1, $2, $3, $4)`,
+        [normalize, coef.заголовок || '', coef.название.trim(), Number(coef.значение || 0)]
       )
     }
+
     await loadCoefficients()
-    alerts.success('Коэффициент сохранен!')
   } catch (error) {
     console.error('Ошибка сохранения:', error)
-    alerts.error('Ошибка при сохранении')
+    window.alert('Ошибка при сохранении коэффициента')
   }
 }
 
-const deleteCoefficient = async coef => {
-  const { isConfirmed } = await alerts.confirmDelete('Удалить коэффициент?')
-
-  if (!isConfirmed) return
+async function deleteCoefficient(coef) {
+  const confirmed = window.confirm('Удалить коэффициент?')
+  if (!confirmed) return
 
   if (!coef.идентификатор) {
-    coefficients.value = coefficients.value.filter(c => c.tempId !== coef.tempId)
-    alerts.info('Коэффициент удален')
+    coefficients.value = coefficients.value.filter((c) => c.tempId !== coef.tempId)
     return
   }
 
   try {
     const db = await getDb()
-    await db.execute('DELETE FROM Справочник_коэффициентов WHERE идентификатор = $1', [coef.идентификатор])
+    await db.execute('DELETE FROM coefficients WHERE id = $1', [coef.идентификатор])
     await loadCoefficients()
-    alerts.info('Коэффициент удален')
   } catch (error) {
     console.error('Ошибка удаления:', error)
-    alerts.error('Ошибка при удалении')
+    window.alert('Ошибка при удалении коэффициента')
   }
 }
 </script>
@@ -219,79 +260,39 @@ const deleteCoefficient = async coef => {
   color: var(--accent);
 }
 
-.text-muted {
-  color: var(--text-soft);
-}
-
-.danger-text {
-  color: var(--danger);
-}
-
-.col-category {
-  width: 150px;
-}
-
-.col-value {
-  width: 120px;
-  text-align: center;
-}
-
-.col-actions {
-  width: 100px;
-  text-align: center;
-}
-
 .center {
   text-align: center;
 }
 
-.btn-icon {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  padding: 0 5px;
+.text-muted {
   color: var(--text-soft);
-  opacity: 0.8;
-  transition: transform var(--transition-fast), opacity var(--transition-fast), color var(--transition-fast);
-}
-
-.btn-icon:hover {
-  opacity: 1;
-  transform: scale(1.15);
-  color: var(--accent);
 }
 
 .empty-cell {
   padding: 20px;
 }
 
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+.col-category {
+  width: 220px;
 }
 
-input[type="number"] {
-  -moz-appearance: textfield;
+.col-value {
+  width: 140px;
 }
 
-@media (max-width: 700px) {
-  .coefficients-view {
-    padding: 16px;
-  }
+.col-actions {
+  width: 120px;
+}
 
-  .table-container {
-    padding: 16px;
-  }
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  margin: 0 4px;
+}
 
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .search-input {
-    min-width: 0;
-  }
+.danger-text {
+  color: var(--danger);
 }
 </style>

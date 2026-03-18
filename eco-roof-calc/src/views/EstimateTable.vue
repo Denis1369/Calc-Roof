@@ -8,8 +8,7 @@
           <tr>
             <th class="col-code">Код</th>
             <th class="col-name">Наименование {{ type === 'work' ? 'работ' : 'материалов' }}</th>
-            <th v-if="type === 'material'" class="col-variant">Профиль / вариант</th>
-            <th v-if="type === 'material'" class="col-thickness">Толщина, мм</th>
+            <th v-if="type === 'material'" class="col-variant">Вариант / профиль</th>
             <th v-if="type === 'material'" class="col-supplier">Тип / Поставщик</th>
             <th class="col-unit">Ед.изм.</th>
             <th class="col-formula">Формула расчета</th>
@@ -38,45 +37,20 @@
 
             <td v-if="type === 'material'" class="center">
               <select
-                v-if="isProfileSheet(item) && item.profileOptions?.length"
-                v-model="item.selectedProfileVariantId"
-                class="cell-input center variant-select"
-                @change="handleProfileVariantChange(item)"
-              >
-                <option
-                  v-for="variant in item.profileOptions"
-                  :key="variant.id"
-                  :value="variant.id"
-                >
-                  {{ variant.profile_name || variant.variant_label }}
-                </option>
-              </select>
-
-              <select
-                v-else-if="hasVariantOptions(item)"
+                v-if="hasVariantOptions(item)"
                 v-model="item.selectedVariantId"
                 class="cell-input center variant-select"
                 @change="handleVariantChange(item)"
               >
-                <option v-for="variant in item.variantOptions" :key="variant.id" :value="variant.id">
+                <option
+                  v-for="variant in item.variantOptions"
+                  :key="variant.id"
+                  :value="variant.id"
+                >
                   {{ formatVariantLabel(variant) }}
                 </option>
               </select>
 
-              <div v-else class="variant-empty">—</div>
-            </td>
-
-            <td v-if="type === 'material'" class="center">
-              <select
-                v-if="isProfileSheet(item)"
-                v-model.number="item.profileThickness"
-                class="cell-input center variant-select"
-                @change="handleThicknessChange(item)"
-              >
-                <option v-for="value in profileThicknessOptions" :key="value" :value="value">
-                  {{ value }}
-                </option>
-              </select>
               <div v-else class="variant-empty">—</div>
             </td>
 
@@ -150,25 +124,26 @@ const totalSum = computed(() => {
 
 const materialCache = new Map()
 let materialCatalog = []
-const profileThicknessOptions = [0.65, 0.7, 0.75, 0.8, 0.9, 1.0, 1.2]
 
 onMounted(async () => {
-  await ensureCatalogLoaded()
+  await loadMaterialCatalog()
   await ensureVariantsLoaded()
 })
 
 watch(
-  () => props.items?.map(item => `${item.name || ''}|${item.base_name || ''}|${item.material_id || ''}|${item.profile_name || ''}`).join('||'),
+  () => props.items?.map(item => `${item.name || ''}|${item.base_name || ''}|${item.material_id || ''}`).join('||'),
   async () => {
     await ensureVariantsLoaded()
   },
   { deep: true }
 )
 
-async function ensureCatalogLoaded() {
-  if (materialCatalog.length) return
+async function loadMaterialCatalog() {
+  if (props.type !== 'material') return
+  if (materialCatalog.length > 0) return
+
   const data = await getCatalogData()
-  materialCatalog = Array.isArray(data.materials) ? data.materials : []
+  materialCatalog = Array.isArray(data?.materials) ? data.materials : []
 }
 
 async function handleNameChange(item) {
@@ -179,7 +154,8 @@ async function handleNameChange(item) {
 
 async function ensureVariantsLoaded() {
   if (props.type !== 'material') return
-  await ensureCatalogLoaded()
+  await loadMaterialCatalog()
+
   for (const item of props.items || []) {
     await ensureVariantsLoadedForItem(item, false)
   }
@@ -187,9 +163,9 @@ async function ensureVariantsLoaded() {
 
 async function ensureVariantsLoadedForItem(item, forceReload) {
   if (props.type !== 'material') return
-  await ensureCatalogLoaded()
+  await loadMaterialCatalog()
 
-  const sourceName = `${item.base_name || item.name || item.profile_name || ''}`.trim()
+  const sourceName = `${item.base_name || item.name || ''}`.trim()
   if (!sourceName) return
 
   const cacheKey = normalize(sourceName)
@@ -203,13 +179,22 @@ async function ensureVariantsLoadedForItem(item, forceReload) {
 
   if (!material) {
     item.variantOptions = []
-    item.profileOptions = []
     item.selectedVariantId = null
-    item.selectedProfileVariantId = null
     return
   }
 
-  const variants = Array.isArray(material.variants) ? material.variants : []
+  const variants = (material.variants || [])
+    .filter(variant => Number(variant.is_active ?? 1) === 1)
+    .sort((a, b) => {
+      if (Number(b.is_default || 0) !== Number(a.is_default || 0)) {
+        return Number(b.is_default || 0) - Number(a.is_default || 0)
+      }
+
+      const aLabel = `${a.variant_label || ''}`
+      const bLabel = `${b.variant_label || ''}`
+      return aLabel.localeCompare(bLabel, 'ru')
+    })
+
   const payload = { material, variants }
   materialCache.set(cacheKey, payload)
   applyMaterialLookup(item, payload, false)
@@ -221,51 +206,27 @@ function applyMaterialLookup(item, payload, emitRecalculate) {
 
   if (!material) {
     item.variantOptions = []
-    item.profileOptions = []
     item.selectedVariantId = null
-    item.selectedProfileVariantId = null
     return
   }
 
   item.material_id = material.id
   item.base_name = material.base_name || material.display_name || item.name
+  item.name = material.display_name || item.base_name || item.name
   item.unit = material.unit || item.unit
-
-  if (isProfileSheet(item) || isProfileSheetMaterial(material)) {
-    item.profileOptions = variants.filter((variant) => `${variant.variant_type || ''}` === 'profile')
-    item.variantOptions = []
-
-    const selectedProfile =
-      item.profileOptions.find((variant) => Number(variant.id) === Number(item.selectedProfileVariantId)) ||
-      item.profileOptions.find((variant) => `${variant.profile_name || ''}` === `${item.profile_name || ''}`) ||
-      item.profileOptions.find((variant) => Number(variant.is_default || 0) === 1) ||
-      item.profileOptions[0]
-
-    if (selectedProfile) {
-      item.selectedProfileVariantId = selectedProfile.id
-      item.profile_name = selectedProfile.profile_name || ''
-      item.variant_label = selectedProfile.variant_label || selectedProfile.profile_name || ''
-      item.name = `Профлист ${selectedProfile.profile_name || selectedProfile.variant_label || ''}`.trim()
-      item.price = Number(selectedProfile.price || item.price || 0)
-    }
-
-    item.profileThickness = Number(item.profileThickness || item.thickness || 0.8)
-    item.thickness = Number(item.profileThickness || 0.8)
-    item.thickness_unit = 'мм'
-    item.code = buildProfileSheetCode(item)
-
-    if (emitRecalculate) emit('recalculate')
-    return
-  }
-
-  item.variantOptions = variants
-  item.profileOptions = []
+  item.variantOptions = variants.map(variant => ({
+    ...variant,
+    label: formatVariantLabel(variant)
+  }))
 
   const selected = resolveSelectedVariant(item)
   if (selected) {
-    applyVariantToItem(item, selected, emitRecalculate)
-  } else if (item.variantOptions.length > 0) {
-    applyVariantToItem(item, item.variantOptions[0], emitRecalculate)
+    applyVariantToItem(item, selected, emitRecalculate, material)
+  } else if (item.variantOptions.length > 0 && !item.selectedVariantId) {
+    applyVariantToItem(item, item.variantOptions[0], emitRecalculate, material)
+  } else if (item.variantOptions.length === 0) {
+    item.code = material.id
+    item.price = Number(material.base_price || item.price || 0)
   }
 }
 
@@ -286,55 +247,31 @@ function resolveSelectedVariant(item) {
   }
 
   if (item.thickness) {
-    selected = item.variantOptions.find(variant => Number(variant.thickness_mm || 0) === Number(item.thickness))
+    selected = item.variantOptions.find(variant => Number(variant.thickness_mm) === Number(item.thickness))
     if (selected) return selected
   }
 
-  return null
+  return item.variantOptions.find(variant => Number(variant.is_default || 0) === 1) || null
 }
 
 function handleVariantChange(item) {
   if (!hasVariantOptions(item)) return
   const selected = item.variantOptions.find(variant => Number(variant.id) === Number(item.selectedVariantId))
   if (!selected) return
-  applyVariantToItem(item, selected, true)
+  const material = findBaseMaterial(item)
+  applyVariantToItem(item, selected, true, material)
 }
 
-function handleProfileVariantChange(item) {
-  if (!Array.isArray(item.profileOptions)) return
-  const selected = item.profileOptions.find(variant => Number(variant.id) === Number(item.selectedProfileVariantId))
-  if (!selected) return
-  item.profile_name = selected.profile_name || ''
-  item.variant_id = selected.id
-  item.variant_label = selected.variant_label || selected.profile_name || ''
-  item.name = `Профлист ${selected.profile_name || selected.variant_label || ''}`.trim()
-  item.price = Number(selected.price || item.price || 0)
-  item.code = buildProfileSheetCode(item, selected)
-  emit('recalculate')
-}
-
-function handleThicknessChange(item) {
-  item.thickness = Number(item.profileThickness || 0)
-  item.thickness_unit = 'мм'
-  item.code = buildProfileSheetCode(item)
-  emit('recalculate')
-}
-
-function buildProfileSheetCode(item, selectedVariant = null) {
-  const materialId = item.material_id || 'profile-sheet'
-  const profile = selectedVariant?.profile_name || item.profile_name || 'PROFILE'
-  const thickness = item.profileThickness || item.thickness || ''
-  return `${materialId}-${profile}-${thickness}`
-}
-
-function applyVariantToItem(item, variant, emitRecalculate) {
+function applyVariantToItem(item, variant, emitRecalculate, material) {
   item.variant_id = variant.id
   item.selectedVariantId = variant.id
   item.thickness = variant.thickness_mm || 0
   item.thickness_unit = 'мм'
-  item.code = variant.sku || item.code
-  item.price = Number(variant.price || 0)
+  item.code = variant.sku || `${material?.id || ''}-${variant.id}`
+  item.price = Number(variant.price || material?.base_price || 0)
   item.variant_label = variant.variant_label || ''
+  item.profile_name = variant.profile_name || ''
+
   if (emitRecalculate) {
     emit('recalculate')
   }
@@ -346,16 +283,19 @@ function hasVariantOptions(item) {
 
 function formatVariantLabel(variant) {
   if (variant.profile_name) {
-    return `Профлист ${variant.profile_name}`
+    const parts = [variant.profile_name]
+    if (Number(variant.thickness_mm) > 0) {
+      parts.push(`${Number(variant.thickness_mm)} мм`)
+    }
+    return parts.join(' · ')
   }
 
-  const thickness = Number(variant.thickness_mm || 0)
-  if (thickness > 0) {
-    return `${thickness} мм`
+  if (Number(variant.thickness_mm) > 0) {
+    return `${Number(variant.thickness_mm)} мм`
   }
 
-  if (variant.height_mm && variant.width_mm) {
-    return `${variant.height_mm}×${variant.width_mm}`
+  if (Number(variant.width_mm) > 0 && Number(variant.height_mm) > 0) {
+    return `${Number(variant.width_mm)}×${Number(variant.height_mm)} мм`
   }
 
   return variant.variant_label || variant.sku || `Вариант ${variant.id}`
@@ -369,9 +309,7 @@ function findBaseMaterial(item) {
 
   const candidateNames = [
     item.base_name,
-    item.name,
-    item.profile_name,
-    item.variant_label
+    item.name
   ].filter(Boolean)
 
   for (const name of candidateNames) {
@@ -383,13 +321,6 @@ function findBaseMaterial(item) {
     found = materialCatalog.find(material => normalize(material.display_name) === target)
     if (found) return found
 
-    found = materialCatalog.find(
-      material => Array.isArray(material.variants) && material.variants.some(variant =>
-        normalize(variant.profile_name).includes(target) || normalize(variant.variant_label).includes(target)
-      )
-    )
-    if (found) return found
-
     found = materialCatalog.find(material => normalize(material.base_name).includes(target))
     if (found) return found
 
@@ -398,14 +329,6 @@ function findBaseMaterial(item) {
   }
 
   return null
-}
-
-function isProfileSheet(item) {
-  return normalize(item.base_name || item.name).includes('профилированный лист') || normalize(item.name).includes('профлист')
-}
-
-function isProfileSheetMaterial(material) {
-  return normalize(material.base_name || material.display_name).includes('профилированный лист')
 }
 
 function normalize(value) {
@@ -427,128 +350,264 @@ function normalize(value) {
 }
 
 .table-subtitle {
-  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
   font-style: italic;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 1rem;
+  color: var(--text-soft);
 }
 
 .table-wrapper {
+  width: 100%;
   overflow-x: auto;
+  border-radius: 10px;
   border: 1px solid var(--border-color);
-  border-radius: 14px;
+  margin-bottom: 1rem;
+  background: var(--bg-card);
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1150px;
+  table-layout: fixed;
 }
 
-.data-table th,
-.data-table td {
-  border-bottom: 1px solid var(--border-color);
-  padding: 0;
-  text-align: center;
-  background: var(--bg-card);
+.works-table {
+  min-width: 1050px;
+}
+
+.mat-table {
+  min-width: 1320px;
 }
 
 .data-table th {
   background: var(--bg-card-soft);
-  color: var(--text-soft);
   padding: 12px 8px;
-  font-size: 13px;
+  font-size: 0.75rem;
   text-transform: uppercase;
+  border: 1px solid var(--border-color);
+  color: var(--text-soft);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
-.col-code { width: 90px; }
-.col-name { width: 360px; }
-.col-variant { width: 190px; }
-.col-thickness { width: 120px; }
-.col-supplier { width: 150px; }
-.col-unit { width: 80px; }
-.col-formula { width: 180px; }
-.col-qty { width: 110px; }
-.col-price { width: 120px; }
-.col-sum { width: 140px; }
-.col-action { width: 54px; }
+.data-table td {
+  border: 1px solid var(--border-color);
+  padding: 0;
+  position: relative;
+  height: 45px;
+  vertical-align: middle;
+  color: var(--text-main);
+  background: var(--bg-card);
+}
+
+.col-code {
+  width: 70px;
+}
+
+.col-name {
+  width: 330px;
+}
+
+.col-variant {
+  width: 180px;
+}
+
+.col-supplier {
+  width: 140px;
+}
+
+.col-unit {
+  width: 60px;
+}
+
+.col-formula {
+  width: 200px;
+}
+
+.col-qty {
+  width: 90px;
+}
+
+.col-price {
+  width: 110px;
+}
+
+.col-sum {
+  width: 130px;
+}
+
+.col-action {
+  width: 45px;
+  border: none !important;
+  background: transparent !important;
+}
 
 .cell-input {
   width: 100%;
-  padding: 10px;
+  height: 44px;
   border: none;
   background: transparent;
-  color: var(--text-main);
-  font: inherit;
+  padding: 0 12px;
+  line-height: 44px;
+  border-radius: 0;
+  margin: 0;
+  display: block;
   box-sizing: border-box;
+  color: var(--text-main);
+  outline: none;
 }
 
 .cell-input:focus {
-  outline: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
   background: var(--bg-hover);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  z-index: 5;
 }
 
-.variant-select,
 .supplier-select,
+.variant-select {
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+
 .formula-input {
-  text-align: center;
+  color: var(--text-soft);
+  font-family: 'Fira Code', monospace;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.qty-display {
+  background: var(--bg-card-soft);
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.accent-text {
+  color: var(--accent);
+  font-family: monospace;
+  font-weight: 800;
 }
 
 .variant-empty {
   color: var(--text-soft);
-  padding: 10px;
-}
-
-.qty-display {
-  padding: 10px;
+  font-size: 13px;
 }
 
 .subtotal-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 18px;
-  padding: 12px 14px;
-  background: var(--bg-card-soft);
+  text-align: right;
+  padding: 0.75rem 0;
   border-top: 1px solid var(--border-color);
+  color: var(--text-main);
+  background: var(--bg-card);
 }
 
 .subtotal-label {
+  margin-right: 1rem;
   color: var(--text-soft);
 }
 
 .subtotal-value {
+  font-weight: 700;
+  min-width: 150px;
+  display: inline-block;
   color: var(--accent);
-  font-weight: 800;
 }
 
 .btn-text {
-  width: 100%;
-  margin-top: 10px;
-  padding: 12px;
-  border: 2px dashed var(--border-color);
-  border-radius: 12px;
   background: transparent;
+  border: 2px dashed var(--border-strong);
   color: var(--text-soft);
   font-weight: 700;
   cursor: pointer;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.95rem;
+  border-radius: 10px;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  display: block;
+  width: 100%;
+  text-align: center;
 }
 
 .btn-text:hover {
+  background: var(--bg-hover);
   border-color: var(--accent);
   color: var(--accent);
 }
 
 .btn-icon {
-  background: transparent;
+  opacity: 0.55;
+  transition: transform var(--transition-fast), opacity var(--transition-fast), color var(--transition-fast);
+  background: none;
   border: none;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 1.2rem;
+  padding: 0;
+  color: var(--text-soft);
 }
 
-.center { text-align: center; }
-.right { text-align: right; }
-.bold { font-weight: 700; }
-.accent-text { color: var(--accent); }
-.hide-on-print { }
+.btn-icon:hover {
+  opacity: 1;
+  transform: scale(1.15);
+  color: var(--danger);
+}
+
+.center {
+  text-align: center;
+}
+
+.right {
+  text-align: right;
+}
+
+.bold {
+  font-weight: 700;
+}
+
+.text-left {
+  text-align: left;
+}
+
+@media print {
+  .hide-on-print {
+    display: none !important;
+  }
+
+  .data-table th,
+  .data-table td {
+    border: 1px solid #000 !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  .qty-display,
+  .accent-text,
+  .subtotal-row,
+  .subtotal-label,
+  .subtotal-value,
+  .formula-input {
+    color: #000 !important;
+    background: #fff !important;
+  }
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+input::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
+input::-webkit-list-button {
+  display: none !important;
+}
 </style>

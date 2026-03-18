@@ -64,17 +64,21 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getDb, normalizeSystemRecord } from '../database'
+import { usePresetsFacade } from '../features/presets/usePresetsFacade'
 import { buildEstimateFromSystem, storePendingGeneratedEstimate } from '../utils/templateEstimateBuilder'
 import TemplateOptionsModal from '../components/TemplateOptionsModal.vue'
 import TemplateParamsModal from '../components/TemplateParamsModal.vue'
 
 const router = useRouter()
 
-const loading = ref(false)
-const systems = ref([])
+const {
+  loading,
+  systems,
+  selectedSystem,
+  loadSystems,
+  selectSystem
+} = usePresetsFacade()
 
-const selectedSystem = ref(null)
 const selectedOptionKeys = ref([])
 const selectedParamValues = ref({})
 
@@ -83,27 +87,14 @@ const isParamsOpen = ref(false)
 
 onMounted(loadSystems)
 
-async function loadSystems() {
-  loading.value = true
+async function openSystem(system) {
+  const fullSystem = await selectSystem(system.код || system.code)
+  if (!fullSystem) return
 
-  try {
-    const db = await getDb()
-    const rows = await db.select(`
-      SELECT *
-      FROM Справочник_систем
-      WHERE активна = 1
-      ORDER BY sort_order, название
-    `)
+  selectedOptionKeys.value = (fullSystem.опции || [])
+    .filter((option) => option.default)
+    .map((option) => option.key)
 
-    systems.value = rows.map(normalizeSystemRecord)
-  } finally {
-    loading.value = false
-  }
-}
-
-function openSystem(system) {
-  selectedSystem.value = system
-  selectedOptionKeys.value = (system.опции || []).filter(option => option.default).map(option => option.key)
   selectedParamValues.value = {}
   isOptionsOpen.value = true
 }
@@ -164,6 +155,7 @@ function getIcon(name) {
 function getBaseLabel(value) {
   const text = `${value || ''}`.toLowerCase()
   if (text.includes('prof') || text.includes('лист')) return 'Профлист'
+  if (text.includes('proflist')) return 'Профлист'
   return 'Бетон / ЖБ'
 }
 

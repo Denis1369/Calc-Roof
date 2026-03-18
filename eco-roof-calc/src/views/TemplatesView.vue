@@ -177,15 +177,45 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { getDb, createTemplateField, createTemplateItem, createTemplatePayload } from '../database'
+import { getDb } from '../infrastructure/db/client'
 
 const loading = ref(false)
 const templates = ref([])
 const selectedTemplateId = ref(null)
 
 const selectedTemplate = computed(() => {
-  return templates.value.find(item => item.идентификатор === selectedTemplateId.value) || null
+  return templates.value.find((item) => item.идентификатор === selectedTemplateId.value) || null
 })
+
+function createTemplateField(payload = {}) {
+  return {
+    key: payload.key || crypto.randomUUID(),
+    label: payload.label || '',
+    type: payload.type || 'number',
+    unit: payload.unit || '',
+    value: payload.value ?? ''
+  }
+}
+
+function createTemplateItem(payload = {}) {
+  return {
+    key: payload.key || crypto.randomUUID(),
+    label: payload.label || 'Новый пункт',
+    checked: payload.checked ?? false,
+    fields: Array.isArray(payload.fields) && payload.fields.length
+      ? payload.fields.map((field) => createTemplateField(field))
+      : [createTemplateField()]
+  }
+}
+
+function createTemplatePayload(payload = {}) {
+  return {
+    version: 2,
+    items: Array.isArray(payload.items)
+      ? payload.items.map((item) => createTemplateItem(item))
+      : []
+  }
+}
 
 function normalizeTemplateData(rawValue) {
   if (!rawValue) {
@@ -197,31 +227,32 @@ function normalizeTemplateData(rawValue) {
 
     if (Array.isArray(parsed)) {
       return createTemplatePayload({
-        items: parsed.map(item => ({
-          ...createTemplateItem(),
-          ...item,
-          fields: Array.isArray(item.fields)
-            ? item.fields.map(field => ({ ...createTemplateField(), ...field }))
-            : [createTemplateField()]
-        }))
+        items: parsed.map((item) => createTemplateItem(item))
       })
     }
 
     return createTemplatePayload({
       ...parsed,
       items: Array.isArray(parsed.items)
-        ? parsed.items.map(item => ({
-            ...createTemplateItem(),
-            ...item,
-            fields: Array.isArray(item.fields)
-              ? item.fields.map(field => ({ ...createTemplateField(), ...field }))
-              : [createTemplateField()]
-          }))
+        ? parsed.items.map((item) => createTemplateItem(item))
         : []
     })
   } catch {
     return createTemplatePayload()
   }
+}
+
+async function ensureTemplatesTable() {
+  const db = await getDb()
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS user_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL DEFAULT '',
+      data_json TEXT NOT NULL DEFAULT '{}',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
 }
 
 async function loadTemplates() {
@@ -230,15 +261,15 @@ async function loadTemplates() {
   try {
     const db = await getDb()
     const rows = await db.select(`
-      SELECT идентификатор, название, данные_json
-      FROM Справочник_шаблонов
-      ORDER BY идентификатор DESC
+      SELECT id, name, data_json
+      FROM user_templates
+      ORDER BY id DESC
     `)
 
-    templates.value = rows.map(row => ({
-      идентификатор: row.идентификатор,
-      название: row.название || '',
-      data: normalizeTemplateData(row.данные_json)
+    templates.value = rows.map((row) => ({
+      идентификатор: row.id,
+      название: row.name || '',
+      data: normalizeTemplateData(row.data_json)
     }))
 
     if (!selectedTemplateId.value && templates.value.length > 0) {
@@ -267,7 +298,7 @@ async function createNewTemplate() {
   })
 
   await db.execute(
-    `INSERT INTO Справочник_шаблонов (название, данные_json) VALUES ($1, $2)`,
+    `INSERT INTO user_templates (name, data_json) VALUES ($1, $2)`,
     [name, JSON.stringify(payload)]
   )
 
@@ -339,11 +370,11 @@ async function saveTemplate() {
 
   const payload = {
     version: 2,
-    items: selectedTemplate.value.data.items.map(item => ({
+    items: selectedTemplate.value.data.items.map((item) => ({
       key: item.key || crypto.randomUUID(),
       label: item.label || '',
       checked: !!item.checked,
-      fields: item.fields.map(field => ({
+      fields: item.fields.map((field) => ({
         key: field.key || crypto.randomUUID(),
         label: field.label || '',
         type: field.type || 'number',
@@ -354,7 +385,7 @@ async function saveTemplate() {
   }
 
   await db.execute(
-    `UPDATE Справочник_шаблонов SET название = $1, данные_json = $2 WHERE идентификатор = $3`,
+    `UPDATE user_templates SET name = $1, data_json = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
     [
       selectedTemplate.value.название || 'Без названия',
       JSON.stringify(payload),
@@ -368,14 +399,12 @@ async function saveTemplate() {
 
 async function deleteTemplate() {
   if (!selectedTemplate.value) return
+  if (!window.confirm('Удалить шаблон?')) return
 
   const currentId = selectedTemplate.value.идентификатор
   const db = await getDb()
 
-  await db.execute(
-    `DELETE FROM Справочник_шаблонов WHERE идентификатор = $1`,
-    [currentId]
-  )
+  await db.execute(`DELETE FROM user_templates WHERE id = $1`, [currentId])
 
   await loadTemplates()
 
@@ -386,7 +415,10 @@ async function deleteTemplate() {
   }
 }
 
-onMounted(loadTemplates)
+onMounted(async () => {
+  await ensureTemplatesTable()
+  await loadTemplates()
+})
 </script>
 
 <style scoped>
@@ -418,39 +450,39 @@ onMounted(loadTemplates)
 
 .sidebar {
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .sidebar-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
-  margin-bottom: 14px;
   color: var(--text-main);
 }
 
 .template-list-item {
-  width: 100%;
   text-align: left;
   border: 1px solid var(--border-color);
-  background: var(--bg-card);
-  color: var(--text-main);
-  border-radius: 10px;
+  background: var(--bg-card-soft);
   padding: 12px 14px;
-  margin-bottom: 10px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.template-list-item:hover {
-  background: var(--bg-hover);
 }
 
 .template-list-item.active {
   border-color: var(--accent);
-  background: var(--bg-active);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .content {
   min-width: 0;
+}
+
+.empty-state,
+.empty-editor {
+  padding: 20px;
 }
 
 .editor-card {
@@ -459,9 +491,9 @@ onMounted(loadTemplates)
 
 .editor-header {
   display: flex;
-  gap: 16px;
   justify-content: space-between;
-  align-items: flex-end;
+  gap: 16px;
+  align-items: end;
   margin-bottom: 20px;
 }
 
@@ -488,43 +520,44 @@ onMounted(loadTemplates)
 .item-top {
   display: flex;
   justify-content: space-between;
-  align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  align-items: center;
+  margin-bottom: 14px;
 }
 
 .checkbox-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 600;
-  color: var(--text-main);
 }
 
-.item-actions {
+.item-actions,
+.field-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
+.grid-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .fields-block {
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border-color);
+  margin-top: 16px;
 }
 
 .fields-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .fields-title {
-  font-size: 16px;
   font-weight: 700;
-  color: var(--text-main);
 }
 
 .field-row {
@@ -532,58 +565,24 @@ onMounted(loadTemplates)
   margin-bottom: 12px;
 }
 
-.grid-two {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
 .field-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
-.field-actions {
-  margin-top: 12px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.mini-btn {
-  padding: 8px 10px;
-  font-size: 13px;
-}
-
+.mini-btn,
 .small-btn {
   padding: 8px 12px;
-  font-size: 13px;
 }
 
-.empty-state,
-.empty-editor {
-  padding: 24px;
-  text-align: center;
-  color: var(--text-soft);
-}
-
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .layout {
     grid-template-columns: 1fr;
   }
 
-  .field-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .editor-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-
-@media (max-width: 700px) {
-  .page-header,
+  .editor-header,
+  .item-top,
   .fields-header {
     flex-direction: column;
     align-items: stretch;
@@ -592,11 +591,6 @@ onMounted(loadTemplates)
   .grid-two,
   .field-grid {
     grid-template-columns: 1fr;
-  }
-
-  .item-top {
-    flex-direction: column;
-    align-items: stretch;
   }
 }
 </style>
