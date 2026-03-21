@@ -1,4 +1,4 @@
-﻿import { getDb } from '../db/client'
+import { getDb } from '../db/client'
 
 function tryParseJson(value, fallback) {
   try {
@@ -203,6 +203,12 @@ export class SystemRepository {
       params: tryParseJson(row.params_json, {}),
       features: tryParseJson(row.features_json, {})
     }
+  }
+
+
+  async deleteSystemConfig(id) {
+    const db = await getDb()
+    await db.execute('DELETE FROM saved_system_configs WHERE id = $1', [id])
   }
 
   async listSavedSystemConfigs() {

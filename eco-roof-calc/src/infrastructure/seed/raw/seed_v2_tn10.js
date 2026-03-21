@@ -8744,6 +8744,322 @@ async function seedWorks(db) {
   }
 }
 
+
+function upsertFormula(code, name, expression, description = '') {
+  const existing = formulasSeed.find((item) => item.code === code)
+  if (existing) {
+    existing.name = name
+    existing.expression = expression
+    existing.description = description
+    return existing
+  }
+
+  const formula = { code, name, expression, description }
+  formulasSeed.push(formula)
+  return formula
+}
+
+function upsertWorkSeed(name, unit, price, category = 'Классик') {
+  const existing = worksSeed.find((item) => `${item.наименование_работы || ''}`.trim().toLowerCase() === `${name}`.trim().toLowerCase())
+  const payload = {
+    категория_работы: category,
+    наименование_работы: name,
+    единица_измерения_работы: unit,
+    цена_0_300: price,
+    цена_300_600: price,
+    цена_600_1000: price,
+    цена_1000_3000: price,
+    цена_3000_6000: price,
+    цена_6000_15000: price,
+    цена_15000_30000: price,
+    цена_более_30000: price
+  }
+
+  if (existing) {
+    Object.assign(existing, payload)
+    return existing
+  }
+
+  worksSeed.push(payload)
+  return payload
+}
+
+function upsertMaterialSeed({
+  category = 'Классик',
+  subcategory = 'Материалы',
+  name,
+  unit,
+  price,
+  brand = '',
+  model = '',
+  materialType = ''
+}) {
+  const existing = baseMaterialsSeed.find((item) => `${item.полное_наименование_материала || ''}`.trim().toLowerCase() === `${name}`.trim().toLowerCase())
+  const payload = {
+    главная_категория: category,
+    подкатегория: subcategory,
+    артикул_товара: '',
+    полное_наименование_материала: name,
+    единица_измерения: unit,
+    базовая_цена: Number(price || 0),
+    ссылка: '',
+    базовое_наименование: name,
+    бренд: brand,
+    модель: model,
+    тип_материала: materialType || subcategory
+  }
+
+  if (existing) {
+    Object.assign(existing, payload)
+    return existing
+  }
+
+  baseMaterialsSeed.push(payload)
+  return payload
+}
+
+function findSystemSeed(code) {
+  return systemsSeed.find((item) => item.code === code)
+}
+
+function applyKlassikControlPatch() {
+  upsertFormula('COUNT', 'Количество', '1', 'Фиксированное количество')
+
+  const workSeedRows = [
+    ['Демонтаж гидроизоляционного слоя', 'м2', 130, 'Демонтаж'],
+    ['Демонтаж теплоизоляционного слоя', 'м2', 140, 'Демонтаж'],
+    ['Демонтаж профилированного настила', 'м2', 180, 'Демонтаж'],
+    ['Монтаж профилированного настила Н-114', 'м2', 140, 'Основание'],
+    ['Устройство L-образного профиля и профилей усиления', 'м/п', 20, 'Основание'],
+    ['Устройство профилей усиления (коньковые усиления, усиления ендов)', 'м/п', 10, 'Основание'],
+    ['Устройство профилей усиления деф. шва', 'м/п', 10, 'Основание'],
+    ['Монтаж шины молниезащиты (механическое крепление)', 'м/п', 200, 'Основание'],
+    ['Устройство усиления мест воронок внутреннего водоотведения из оц. стали толщиной 0,5 мм размером 0,6*0,6 м', 'шт', 100, 'Основание'],
+    ['Устройство заполнения гофр профлиста НГ утеплителем на длину 250 мм', 'м/п', 10, 'Основание'],
+    ['Устройство пароизоляционного слоя из пароизоляционной пленки', 'м2', 40, 'Пароизоляция'],
+    ['Устройство контруклона из минераловатных теплоизоляционных плит 4,2 %', 'м2', 170, 'Теплоизоляция'],
+    ['Устройство теплоизоляционного слоя из минераловатного утеплителя в два слоя с перехлестом швов с мех. креплением', 'м2', 165, 'Теплоизоляция'],
+    ['Монтаж гидроизоляционного покрытия из ПВХ мембраны, с продольным нахлестом не менее 120 мм и поперечным - не менее 200 мм', 'м2', 190, 'Гидроизоляция'],
+    ['Устройство примыкания гидроизоляционного покрытия из ПВХ- мембраны к парапету', 'м/п', 375, 'Гидроизоляция'],
+    ['Монтаж прижимной и краевой кровельной планки', 'м/п', 40, 'Гидроизоляция'],
+    ['Устройство примыканий к стойкам фахверка с утеплением', 'шт', 2920, 'Гидроизоляция'],
+    ['Устройство примыканий к вытяжкам', 'шт', 2080, 'Гидроизоляция'],
+    ['Устройство примыканий к воздухозаборам', 'шт', 3330, 'Гидроизоляция'],
+    ['Устройство примыканий к вентиляторам', 'шт', 2916, 'Гидроизоляция'],
+    ['Устройство деф. Шва', 'шт', 200, 'Гидроизоляция'],
+    ['Устройство примыканий к люкам дымоудаления', 'шт', 2920, 'Гидроизоляция'],
+    ['Устройство пешеходных дорожек Puzzle', 'шт', 250, 'Гидроизоляция'],
+    ['Устройство примыканий стойкам блоков кондиционеров', 'шт', 1666, 'Гидроизоляция'],
+    ['Устройство примыканий к проходкам', 'шт', 2083, 'Гидроизоляция'],
+    ['Устройство примыкания к проходкам среднего сечения диамтером от 150 мм до 300 мм (к дефлекторам круглого сечения, трубам)', 'шт', 2916, 'Гидроизоляция'],
+    ['Устройство примыканий к проходкам малого сечения диамтером до 150 мм (к гусакам для ввода кабеля, трубам и выводам)', 'шт', 1666, 'Гидроизоляция'],
+    ['Устройство противопожарных рассечек 2*2 м вокруг зенитных фонарей, люков дымоудаления и дефлекторов из защитного материала NG', 'м2', 333, 'Гидроизоляция'],
+    ['Изготовление парапетных крышек', 'м/п', 500, 'Комплектующие'],
+    ['Устройство парапетных крышек', 'м/п', 550, 'Комплектующие'],
+    ['Устройство кровельных аэраторов', 'шт', 1400, 'Комплектующие'],
+    ['Монтаж воронок внутреннего водоотведения', 'шт', 1666, 'Водоотведение'],
+    ['Монтаж воронок внешнего водоотведения', 'шт', 1666, 'Водоотведение'],
+    ['Организационные и транспортные расходы', 'ед', 564000, 'Накладные'],
+    ['Подъемы и механизмы', 'ед', 32000, 'Накладные'],
+    ['Утилизация и вывоз мусора', 'ед', 15000, 'Накладные']
+  ]
+
+  for (const [name, unit, price, category] of workSeedRows) {
+    upsertWorkSeed(name, unit, price, category)
+  }
+
+  const materialSeedRows = [
+    { name: 'L-образный профиль', unit: 'мп', price: 1284, category: 'Основание', subcategory: 'Профили усиления', materialType: 'Профили' },
+    { name: 'Профиль усиления (коньковые усиления, усиления ендов)', unit: 'мп', price: 1300, category: 'Основание', subcategory: 'Профили усиления', materialType: 'Профили' },
+    { name: 'Профиль усиления деф. шва', unit: 'мп', price: 1300, category: 'Основание', subcategory: 'Профили усиления', materialType: 'Профили' },
+    { name: 'Саморез кровельный 4.8х29 сверлоконечный шайба EPDM', unit: 'шт', price: 2.35, category: 'Основание', subcategory: 'Крепеж', materialType: 'Крепеж' },
+    { name: 'Оцинкованный лист, толщ. 0,7 мм, 600*600 мм', unit: 'шт', price: 1300, category: 'Основание', subcategory: 'Металл', materialType: 'Металл' },
+    { name: 'Мин. плита Технолайт Экстра 1200х600х100мм', unit: 'м3', price: 3700, category: 'Основание', subcategory: 'Минвата', brand: 'ТехноНИКОЛЬ', materialType: 'Минвата' },
+    { name: 'Пленка пароизоляционная Logicplast 200 мкм 3х100м (+/-50мкм)', unit: 'м2', price: 26.44, category: 'Пароизоляция', subcategory: 'Пленки', brand: 'Logicplast', materialType: 'Пароизоляция' },
+    { name: 'Скотч двусторонний для пароизоляции', unit: 'шт', price: 190.36, category: 'Пароизоляция', subcategory: 'Комплектующие', materialType: 'Скотч' },
+    { name: 'Теплоизоляционный материал ТЕХНОРУФ В ЭКСТРА 50 мм', unit: 'м3', price: 14960, category: 'Теплоизоляция', subcategory: 'Минвата', brand: 'ТехноНИКОЛЬ', materialType: 'Минвата' },
+    { name: 'Телескопический крепеж FACHMANN, 20 мм', unit: 'шт', price: 3.46, category: 'Крепеж', subcategory: 'Крепеж', brand: 'FACHMANN', materialType: 'Крепеж' },
+    { name: 'Винт-саморез остроконечный FACHMANN NCRP-4,8x80мм', unit: 'шт', price: 6.53, category: 'Крепеж', subcategory: 'Крепеж', brand: 'FACHMANN', materialType: 'Крепеж' },
+    { name: 'Очиститель для ПВХ мембран Fachmann, 3л', unit: 'шт', price: 4508.67, category: 'Гидроизоляция', subcategory: 'Химия', brand: 'FACHMANN', materialType: 'Очиститель' },
+    { name: 'Рейка прижимная 2 м.', unit: 'м/п', price: 75.66, category: 'Гидроизоляция', subcategory: 'Комплектующие', materialType: 'Рейка' },
+    { name: 'Рейка краевая 2 м.', unit: 'м/п', price: 83.8, category: 'Гидроизоляция', subcategory: 'Комплектующие', materialType: 'Рейка' },
+    { name: 'Винт-саморез остроконечный FACHMANN NCDP-5,5x35 мм', unit: 'шт', price: 5.07, category: 'Крепеж', subcategory: 'Крепеж', brand: 'FACHMANN', materialType: 'Крепеж' },
+    { name: 'Герметик полиуретановый FACHMANN PU 35, серый, 600 мл.', unit: 'шт', price: 449.4, category: 'Гидроизоляция', subcategory: 'Химия', brand: 'FACHMANN', materialType: 'Герметик' },
+    { name: 'Винт-саморез остроконечный FACHMANN NCRP-4,8*50', unit: 'шт', price: 3.81, category: 'Крепеж', subcategory: 'Крепеж', brand: 'FACHMANN', materialType: 'Крепеж' },
+    { name: 'ПВХ Logicroof V-RP 1,2 мм мембрана серая 2,10x25 м', unit: 'м2', price: 931, category: 'Гидроизоляция', subcategory: 'ПВХ мембраны', brand: 'Logicroof', materialType: 'ПВХ мембрана' },
+    { name: 'ПВХ Logicroof V-SR 1,5 мм мембрана серая 2 шт. 1x10 м', unit: 'м2', price: 1350, category: 'Гидроизоляция', subcategory: 'ПВХ мембраны', brand: 'Logicroof', materialType: 'ПВХ мембрана' }
+  ]
+
+  for (const row of materialSeedRows) {
+    upsertMaterialSeed(row)
+  }
+
+  const klassik = findSystemSeed('tn-klassik')
+  if (!klassik) return
+
+  klassik.notes = 'Контрольный шаблон Классик по смете Фахман с устойчивыми кодами строк и явными формулами.'
+  klassik.params = [
+    ['demo_hydro_area', 'Демонтаж гидроизоляции', 'number', 'м2', '1128', null, 'Площадь демонтажа гидроизоляционного слоя'],
+    ['demo_insulation_area', 'Демонтаж теплоизоляции', 'number', 'м2', '1118.4', null, 'Площадь демонтажа теплоизоляционного слоя'],
+    ['demo_profile_area', 'Демонтаж профлиста', 'number', 'м2', '894.96', null, 'Площадь демонтажа профилированного настила'],
+    ['roof_area', 'Площадь кровли', 'number', 'м2', '1758.96', null, 'Площадь монтажа кровельной системы'],
+    ['parapet_perimeter', 'Периметр примыканий', 'number', 'м/п', '36', null, 'Суммарная длина примыканий к парапету'],
+    ['base_profile', 'Профиль профлиста', 'select', null, 'Профнастил H114-600 (200 мм)', '["Профнастил H75-750 (187,5 мм)", "Профнастил H90-945 (315 мм)", "Профнастил H114-600 (200 мм)"]', 'Профиль несущего настила'],
+    ['base_profile_thickness', 'Толщина профлиста', 'select', 'мм', '0.8', '["0.65", "0.7", "0.75", "0.8", "0.9", "1.0", "1.2"]', 'Толщина металла профлиста'],
+    ['lower_insulation_thickness', 'Толщина нижнего слоя', 'select', 'мм', '50', '["50", "80", "100", "120"]', 'Толщина нижнего минераловатного слоя'],
+    ['upper_insulation_thickness', 'Толщина верхнего слоя', 'select', 'мм', '50', '["40", "50", "60", "70"]', 'Толщина верхнего слоя'],
+    ['membrane_thickness', 'Толщина ПВХ-мембраны', 'select', 'мм', '1.2', '["1.2", "1.5"]', 'Толщина мембраны'],
+    ['l_profile_length', 'L-профиль', 'number', 'м/п', '36', null, 'Суммарная длина L-образного профиля'],
+    ['ridge_reinforcement_length', 'Профили усиления (ендовы/конек)', 'number', 'м/п', '0', null, 'Суммарная длина усилений ендов и конька'],
+    ['def_joint_profile_length', 'Профиль усиления деф. шва', 'number', 'м/п', '0', null, 'Длина профилей усиления деформационных швов'],
+    ['lightning_length', 'Шина молниезащиты', 'number', 'м/п', '0', null, 'Длина шины молниезащиты'],
+    ['inner_drain_reinforcement_count', 'Усиления воронок', 'number', 'шт', '0', null, 'Количество усилений мест внутренних воронок'],
+    ['corrugation_fill_length', 'Заполнение гофр', 'number', 'м/п', '36', null, 'Длина участков заполнения гофр'],
+    ['vapor_tape_rolls', 'Скотч для пароизоляции', 'number', 'шт', '30', null, 'Количество рулонов двустороннего скотча'],
+    ['counter_slope_area', 'Контруклоны', 'number', 'м2', '0', null, 'Площадь контруклонов'],
+    ['cleaner_units', 'Очиститель ПВХ', 'number', 'шт', '5', null, 'Количество канистр очистителя для ПВХ'],
+    ['parapet_corner_patch_area', 'Усиление углов/парапетов V-SR', 'number', 'м2', '7', null, 'Площадь мембраны V-SR на углы и усиления'],
+    ['fachwerk_count', 'Стойки фахверка', 'number', 'шт', '6', null, 'Количество стоек фахверка'],
+    ['exhaust_count', 'Вытяжки', 'number', 'шт', '0', null, 'Количество вытяжек'],
+    ['air_intake_count', 'Воздухозаборы', 'number', 'шт', '0', null, 'Количество воздухозаборов'],
+    ['fan_count', 'Промышленные вентиляторы', 'number', 'шт', '0', null, 'Количество промышленных вентиляторов'],
+    ['def_joint_count', 'Деформационные швы (шт)', 'number', 'шт', '0', null, 'Количество узлов деформационного шва'],
+    ['smoke_hatch_count', 'Люки дымоудаления', 'number', 'шт', '0', null, 'Количество люков дымоудаления'],
+    ['walkway_puzzle_count', 'Пешеходные дорожки Puzzle', 'number', 'шт', '0', null, 'Количество элементов Walkway Puzzle'],
+    ['ac_stand_count', 'Стойки блоков кондиционеров', 'number', 'шт', '0', null, 'Количество стоек под блоки кондиционеров'],
+    ['pass_general_count', 'Прочие проходки', 'number', 'шт', '0', null, 'Количество проходок через кровлю'],
+    ['pass_medium_count', 'Проходки среднего сечения', 'number', 'шт', '0', null, 'Количество проходок среднего сечения'],
+    ['pass_small_count', 'Проходки малого сечения', 'number', 'шт', '0', null, 'Количество проходок малого сечения'],
+    ['fire_break_area', 'Противопожарные рассечки', 'number', 'м2', '0', null, 'Площадь противопожарных рассечек'],
+    ['parapet_cap_length', 'Парапетные крышки', 'number', 'м/п', '0', null, 'Длина парапетных крышек'],
+    ['inner_drains_count', 'Внутренние воронки', 'number', 'шт', '0', null, 'Количество внутренних водоприемных воронок'],
+    ['outer_drains_count', 'Внешние воронки', 'number', 'шт', '0', null, 'Количество внешних воронок'],
+    ['aerators_count', 'Аэраторы', 'number', 'шт', '0', null, 'Количество аэраторов'],
+    ['lift_mechanism_units', 'Подъемы и механизмы', 'number', 'ед', '5', null, 'Количество единиц подъемов и механизмов'],
+    ['disposal_units', 'Утилизация и вывоз мусора', 'number', 'ед', '0', null, 'Количество единиц на утилизацию']
+  ]
+
+  klassik.features = [
+    ['inner_drains', 'Внутренние воронки', 1, 10],
+    ['outer_drains', 'Внешние воронки', 0, 20],
+    ['aerators', 'Аэраторы', 0, 30],
+    ['parapets', 'Примыкания к парапету', 1, 40],
+    ['walkways', 'Пешеходные дорожки', 0, 50]
+  ]
+
+  klassik.layers = [
+    ['demo_hydro', 'Демонтаж гидроизоляционного слоя', 'demolition', 0, null, [], [['Демонтаж гидроизоляционного слоя', 'AREA', 'demo_hydro_area', 'C8']]],
+    ['demo_insulation', 'Демонтаж теплоизоляционного слоя', 'demolition', 0, null, [], [['Демонтаж теплоизоляционного слоя', 'AREA', 'demo_insulation_area', 'C9']]],
+    ['demo_profile', 'Демонтаж профилированного настила', 'demolition', 0, null, [], [['Демонтаж профилированного настила', 'AREA', 'demo_profile_area', 'C10']]],
+    ['base_mount', 'Монтаж профилированного настила', 'base', 0, null, [], [['Монтаж профилированного настила Н-114', 'AREA', 'roof_area', 'C15']]],
+    ['l_profile', 'Устройство L-образного профиля и профилей усиления', 'base', 0, null,
+      [
+        ['L-образный профиль', 'default', 'C20', 'C25'],
+        ['Профиль усиления (коньковые усиления, усиления ендов)', 'default', 'C21', 'C26'],
+        ['Профиль усиления деф. шва', 'default', 'C22', 'C27'],
+        ['Саморез кровельный 4.8х29 сверлоконечный шайба EPDM', 'fastener', '(C25 + C26 + C27) * 10', 'C28']
+      ],
+      [
+        ['Устройство L-образного профиля и профилей усиления', 'PERIMETER', 'l_profile_length', 'C20'],
+        ['Устройство профилей усиления (коньковые усиления, усиления ендов)', 'PERIMETER', 'ridge_reinforcement_length', 'C21'],
+        ['Устройство профилей усиления деф. шва', 'PERIMETER', 'def_joint_profile_length', 'C22']
+      ]
+    ],
+    ['lightning', 'Устройство шины молниезащиты / заземления', 'accessory', 0, null, [], [['Монтаж шины молниезащиты (механическое крепление)', 'PERIMETER', 'lightning_length', 'C33']]],
+    ['drain_reinforcement', 'Усиление мест внутренних воронок', 'accessory', 0, 'inner_drains',
+      [
+        ['Оцинкованный лист, толщ. 0,7 мм, 600*600 мм', 'default', 'C38', 'C41'],
+        ['Саморез кровельный 4.8х29 сверлоконечный шайба EPDM', 'fastener', 'C38 * 4', 'C42']
+      ],
+      [['Устройство усиления мест воронок внутреннего водоотведения из оц. стали толщиной 0,5 мм размером 0,6*0,6 м', 'COUNT', 'inner_drain_reinforcement_count', 'C38']]
+    ],
+    ['corrugation_fill', 'Устройство заполнения гофр профлиста НГ утеплителем на длину 250 мм', 'accessory', 0, 'parapets',
+      [['Мин. плита Технолайт Экстра 1200х600х100мм', 'default', 'C47 * 0.3 * 0.1 * 1.1', 'C50']],
+      [['Устройство заполнения гофр профлиста НГ утеплителем на длину 250 мм', 'PERIMETER', 'corrugation_fill_length', 'C47']]
+    ],
+    ['vapor_barrier', 'Устройство пароизоляционного слоя', 'vapor_barrier', 0, null,
+      [
+        ['Пленка пароизоляционная Logicplast 200 мкм 3х100м (+/-50мкм)', 'default', 'C55 * 1.15', 'C58'],
+        ['Скотч двусторонний для пароизоляции', 'default', 'vapor_tape_rolls', 'C59']
+      ],
+      [['Устройство пароизоляционного слоя из пароизоляционной пленки', 'AREA', 'C15', 'C55']]
+    ],
+    ['counter_slope', 'Устройство контруклона в ендовах', 'slope', 0, null, [], [['Устройство контруклона из минераловатных теплоизоляционных плит 4,2 %', 'AREA', 'counter_slope_area', 'C64']]],
+    ['insulation', 'Устройство теплоизоляционного слоя', 'insulation', 0, null,
+      [
+        ['Теплоизоляционный материал ТЕХНОРУФ В ЭКСТРА 50 мм', 'default', 'C69 * 1.03 * (lower_insulation_thickness / 1000)', 'C72'],
+        ['Телескопический крепеж FACHMANN, 20 мм', 'fastener', 'C69 * 5', 'C73'],
+        ['Винт-саморез остроконечный FACHMANN NCRP-4,8x80мм', 'fastener', 'C69 * 5', 'C74']
+      ],
+      [['Устройство теплоизоляционного слоя из минераловатного утеплителя в два слоя с перехлестом швов с мех. креплением', 'AREA', 'C15', 'C69']]
+    ],
+    ['waterproofing', 'Устройство гидроизоляционного покрытия из ПВХ-мембраны по плоскости', 'waterproofing', 0, null,
+      [
+        ['ПВХ Logicroof V-RP 1,2 мм мембрана серая 2,10x25 м', 'default', 'C79 * 1.18', 'C82'],
+        ['Телескопический крепеж FACHMANN, 20 мм', 'fastener', 'C79 * 5', 'C83'],
+        ['Винт-саморез остроконечный FACHMANN NCRP-4,8x80мм', 'fastener', 'C83', 'C84'],
+        ['Очиститель для ПВХ мембран Fachmann, 3л', 'default', 'cleaner_units', 'C85']
+      ],
+      [['Монтаж гидроизоляционного покрытия из ПВХ мембраны, с продольным нахлестом не менее 120 мм и поперечным - не менее 200 мм', 'AREA', 'C15', 'C79']]
+    ],
+    ['parapets', 'Устройство гидроизоляции примыканий к парапету', 'waterproofing', 0, 'parapets',
+      [
+        ['ПВХ Logicroof V-RP 1,2 мм мембрана серая 2,10x25 м', 'default', 'C90 * 1.2 * 1.18', 'C93'],
+        ['ПВХ Logicroof V-SR 1,5 мм мембрана серая 2 шт. 1x10 м', 'default', 'parapet_corner_patch_area', 'C94']
+      ],
+      [['Устройство примыкания гидроизоляционного покрытия из ПВХ- мембраны к парапету', 'PERIMETER', 'parapet_perimeter', 'C90']]
+    ],
+    ['pressure_rails', 'Устройство прижимной и краевой алюминиевой планки', 'accessory', 0, 'parapets',
+      [
+        ['Рейка прижимная 2 м.', 'default', 'C90', 'C102'],
+        ['Рейка краевая 2 м.', 'default', 'C90', 'C103'],
+        ['Винт-саморез остроконечный FACHMANN NCDP-5,5x35 мм', 'fastener', 'C90 * 5 * 2', 'C104'],
+        ['Герметик полиуретановый FACHMANN PU 35, серый, 600 мл.', 'default', 'C90 / 4', 'C105']
+      ],
+      [['Монтаж прижимной и краевой кровельной планки', 'PERIMETER', 'C90 * 2', 'C99']]
+    ],
+    ['fachwerk', 'Устройство гидроизоляции стоек фахверка с утеплением', 'detail', 0, null,
+      [
+        ['Теплоизоляционный материал ТЕХНОРУФ В ЭКСТРА 50 мм', 'default', '1.2 * 0.6 * (lower_insulation_thickness / 1000) * 1.05 * C110', 'C113'],
+        ['ПВХ Logicroof V-RP 1,2 мм мембрана серая 2,10x25 м', 'default', 'C110 * 1', 'C114'],
+        ['ПВХ Logicroof V-SR 1,5 мм мембрана серая 2 шт. 1x10 м', 'default', '0.2 * C110 * 8', 'C115'],
+        ['Винт-саморез остроконечный FACHMANN NCRP-4,8*50', 'fastener', '20 * C110', 'C116'],
+        ['Рейка краевая 2 м.', 'default', '1.5 * C110', 'C117'],
+        ['Винт-саморез остроконечный FACHMANN NCDP-5,5x35 мм', 'fastener', '20 * C110', 'C118'],
+        ['Герметик полиуретановый FACHMANN PU 35, серый, 600 мл.', 'default', 'C117 / 4', 'C119']
+      ],
+      [['Устройство примыканий к стойкам фахверка с утеплением', 'COUNT', 'fachwerk_count', 'C110']]
+    ],
+    ['exhausts', 'Устройство примыкания к вытяжкам', 'detail', 0, null, [], [['Устройство примыканий к вытяжкам', 'COUNT', 'exhaust_count', 'C124']]],
+    ['air_intakes', 'Устройство примыканий к воздухозаборам', 'detail', 0, null, [], [['Устройство примыканий к воздухозаборам', 'COUNT', 'air_intake_count', 'C129']]],
+    ['fans', 'Устройство примыканий к вентиляторам', 'detail', 0, null, [], [['Устройство примыканий к вентиляторам', 'COUNT', 'fan_count', 'C134']]],
+    ['def_joints', 'Устройство деф. шва', 'detail', 0, null, [], [['Устройство деф. Шва', 'COUNT', 'def_joint_count', 'C139']]],
+    ['smoke_hatches', 'Устройство примыканий к люкам дымоудаления', 'detail', 0, null, [], [['Устройство примыканий к люкам дымоудаления', 'COUNT', 'smoke_hatch_count', 'C144']]],
+    ['walkway_puzzle', 'Устройство пешеходных дорожек Puzzle', 'detail', 0, 'walkways', [], [['Устройство пешеходных дорожек Puzzle', 'COUNT', 'walkway_puzzle_count', 'C149']]],
+    ['ac_stands', 'Устройство примыканий стойкам блоков кондиционеров', 'detail', 0, null, [], [['Устройство примыканий стойкам блоков кондиционеров', 'COUNT', 'ac_stand_count', 'C154']]],
+    ['pass_general', 'Устройство примыканий к проходкам через кровлю', 'detail', 0, null, [], [['Устройство примыканий к проходкам', 'COUNT', 'pass_general_count', 'C159']]],
+    ['pass_medium', 'Устройство примыкания к проходкам среднего сечения', 'detail', 0, null, [], [['Устройство примыкания к проходкам среднего сечения диамтером от 150 мм до 300 мм (к дефлекторам круглого сечения, трубам)', 'COUNT', 'pass_medium_count', 'C164']]],
+    ['pass_small', 'Устройство примыканий к проходкам малого сечения', 'detail', 0, null, [], [['Устройство примыканий к проходкам малого сечения диамтером до 150 мм (к гусакам для ввода кабеля, трубам и выводам)', 'COUNT', 'pass_small_count', 'C169']]],
+    ['fire_breaks', 'Устройство противопожарных рассечек', 'detail', 0, null, [], [['Устройство противопожарных рассечек 2*2 м вокруг зенитных фонарей, люков дымоудаления и дефлекторов из защитного материала NG', 'AREA', 'fire_break_area', 'C174']]],
+    ['parapet_caps', 'Устройство парапетных крышек', 'detail', 0, null, [], [
+      ['Изготовление парапетных крышек', 'PERIMETER', 'parapet_cap_length', 'C179'],
+      ['Устройство парапетных крышек', 'PERIMETER', 'parapet_cap_length', 'C180']
+    ]],
+    ['aerators', 'Устройство кровельных аэраторов', 'detail', 0, 'aerators', [], [['Устройство кровельных аэраторов', 'COUNT', 'aerators_count', 'C185']]],
+    ['drains', 'Устройство водоприемных воронок', 'drainage', 0, null, [], [
+      ['Монтаж воронок внутреннего водоотведения', 'INNER_DRAINS', 'inner_drains_count', 'C190'],
+      ['Монтаж воронок внешнего водоотведения', 'OUTER_DRAINS', 'outer_drains_count', 'C191']
+    ]],
+    ['overheads', 'Накладные, транспортные и организационные расходы', 'overhead', 0, null, [], [
+      ['Организационные и транспортные расходы', 'COUNT', '1', 'C197'],
+      ['Подъемы и механизмы', 'COUNT', 'lift_mechanism_units', 'C198'],
+      ['Утилизация и вывоз мусора', 'COUNT', 'disposal_units', 'C199']
+    ]]
+  ]
+}
+
+applyKlassikControlPatch()
+
 async function seedMaterials(db) {
   for (const material of baseMaterialsSeed) {
     const baseName = material.базовое_наименование || material.полное_наименование_материала || ''
@@ -8979,10 +9295,11 @@ async function seedSystems(db) {
       )
     }
 
-    for (const layer of system.layers) {
+    for (let layerIndex = 0; layerIndex < system.layers.length; layerIndex++) {
+      const layer = system.layers[layerIndex]
       await db.execute(
         'INSERT INTO system_layers (system_id, code, name, layer_kind, is_optional, feature_code, sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-        [systemId, layer[0], layer[1], layer[2] || '', Number(layer[3] || 0), layer[4] || null, Number(layer[3] ? layer[3] : 0) + 1]
+        [systemId, layer[0], layer[1], layer[2] || '', Number(layer[3] || 0), layer[4] || null, layerIndex + 1]
       )
       const layerRows = await db.select('SELECT id FROM system_layers WHERE system_id = $1 AND code = $2 LIMIT 1', [systemId, layer[0]])
       const layerId = layerRows[0]?.id
@@ -8990,24 +9307,34 @@ async function seedSystems(db) {
 
       const materials = Array.isArray(layer[5]) ? layer[5] : []
       for (let materialIndex = 0; materialIndex < materials.length; materialIndex++) {
-        const [baseName, role] = materials[materialIndex]
+        const materialTuple = materials[materialIndex]
+        const baseName = Array.isArray(materialTuple) ? materialTuple[0] : materialTuple?.baseName
+        const role = Array.isArray(materialTuple) ? materialTuple[1] : materialTuple?.role
+        const defaultExpression = Array.isArray(materialTuple) ? materialTuple[2] : materialTuple?.defaultExpression
+        const stableCode = Array.isArray(materialTuple) ? materialTuple[3] : materialTuple?.stableCode
+        const notes = Array.isArray(materialTuple) ? materialTuple[4] : materialTuple?.notes
         const materialRows = await findMaterialRows(db, baseName)
         for (const materialRow of materialRows) {
           await db.execute(
-            'INSERT OR IGNORE INTO system_layer_material_options (layer_id, material_id, role, is_default, sort_order, notes) VALUES ($1,$2,$3,$4,$5,$6)',
-            [layerId, materialRow.id, role || 'default', materialIndex === 0 ? 1 : 0, materialIndex + 1, '']
+            'INSERT OR IGNORE INTO system_layer_material_options (layer_id, material_id, role, is_default, sort_order, notes, default_expression, stable_code) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+            [layerId, materialRow.id, role || 'default', materialIndex === 0 ? 1 : 0, materialIndex + 1, notes || '', defaultExpression || '', stableCode || '']
           )
         }
       }
 
       const works = Array.isArray(layer[6]) ? layer[6] : []
       for (let workIndex = 0; workIndex < works.length; workIndex++) {
-        const [workName, formulaCode] = works[workIndex]
+        const workTuple = works[workIndex]
+        const workName = Array.isArray(workTuple) ? workTuple[0] : workTuple?.name
+        const formulaCode = Array.isArray(workTuple) ? workTuple[1] : workTuple?.formulaCode
+        const defaultExpression = Array.isArray(workTuple) ? workTuple[2] : workTuple?.defaultExpression
+        const stableCode = Array.isArray(workTuple) ? workTuple[3] : workTuple?.stableCode
+        const notes = Array.isArray(workTuple) ? workTuple[4] : workTuple?.notes
         const workRows = await findWorkRows(db, workName)
         for (const workRow of workRows) {
           await db.execute(
-            'INSERT OR IGNORE INTO system_layer_work_links (layer_id, work_id, formula_code, default_expression, sort_order, notes) VALUES ($1,$2,$3,$4,$5,$6)',
-            [layerId, workRow.id, formulaCode || '', '', workIndex + 1, '']
+            'INSERT OR IGNORE INTO system_layer_work_links (layer_id, work_id, formula_code, default_expression, sort_order, notes, stable_code) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+            [layerId, workRow.id, formulaCode || null, defaultExpression || '', workIndex + 1, notes || '', stableCode || '']
           )
         }
       }

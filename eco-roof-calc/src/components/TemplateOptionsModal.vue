@@ -4,19 +4,19 @@
       <div class="modal-card page-card">
         <div class="modal-header">
           <div>
-            <h3 class="modal-title">Что включить в смету</h3>
-            <div class="modal-subtitle">{{ system?.название }}</div>
+            <h3 class="modal-title">{{ title }}</h3>
+            <div class="modal-subtitle">{{ systemTitle }}</div>
           </div>
-          <button class="close-btn" @click="$emit('close')">✕</button>
+          <button class="close-btn" type="button" @click="$emit('close')">✕</button>
         </div>
 
         <div class="modal-body">
-          <div v-if="!system || !system.опции?.length" class="empty-block ui-card-soft">
-            У этой системы нет дополнительных опций. Нажми «Далее».
+          <div v-if="!mergedOptions.length" class="empty-block ui-card-soft">
+            У этой системы нет дополнительных опций. Нажми «{{ continueLabel }}».
           </div>
 
           <label
-            v-for="option in system?.опции || []"
+            v-for="option in mergedOptions"
             :key="option.key"
             class="option-row ui-card-soft"
           >
@@ -37,8 +37,8 @@
         </div>
 
         <div class="modal-footer">
-          <button class="ui-btn ui-btn-secondary" @click="$emit('close')">Отмена</button>
-          <button class="ui-btn ui-btn-primary" @click="submit">Далее</button>
+          <button class="ui-btn ui-btn-secondary" type="button" @click="$emit('close')">{{ cancelLabel }}</button>
+          <button class="ui-btn ui-btn-primary" type="button" @click="submit">{{ continueLabel }}</button>
         </div>
       </div>
     </div>
@@ -46,25 +46,43 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import * as templateEnhancements from '../shared/templateSystemEnhancements'
+
+const getEnhancedTemplateMeta = templateEnhancements.getEnhancedTemplateMeta || (() => ({ options: [], params: [] }))
+const getSystemTitle = templateEnhancements.getSystemTitle || ((system = {}) => system?.название || system?.name || 'Система')
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
   system: { type: Object, default: null },
-  selectedKeys: { type: Array, default: () => [] }
+  selectedKeys: { type: Array, default: () => [] },
+  title: { type: String, default: 'Что включить в смету' },
+  continueLabel: { type: String, default: 'Далее' },
+  cancelLabel: { type: String, default: 'Отмена' }
 })
 
 const emit = defineEmits(['close', 'continue'])
 
 const localSelectedKeys = ref([])
 
+const systemTitle = computed(() => getSystemTitle(props.system))
+const mergedOptions = computed(() => getEnhancedTemplateMeta(props.system || {}).options || [])
+
 watch(
   () => [props.isOpen, props.system, props.selectedKeys],
   () => {
-    const defaultKeys = Array.isArray(props.selectedKeys) ? [...props.selectedKeys] : []
-    localSelectedKeys.value = defaultKeys
+    const explicitKeys = Array.isArray(props.selectedKeys) ? [...props.selectedKeys] : []
+
+    if (explicitKeys.length) {
+      localSelectedKeys.value = explicitKeys
+      return
+    }
+
+    localSelectedKeys.value = mergedOptions.value
+      .filter((option) => option.default)
+      .map((option) => option.key)
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 )
 
 function submit() {
@@ -88,6 +106,8 @@ function submit() {
   width: 100%;
   max-width: 720px;
   padding: 20px;
+  max-height: calc(100vh - 40px);
+  overflow: auto;
 }
 
 .modal-header {

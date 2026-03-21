@@ -133,6 +133,8 @@ function normalizeWorkItem(item) {
   return {
     id: item?.id || uuid(),
     code: item?.code || '',
+    cellCode: item?.cellCode || '',
+    itemCode: item?.itemCode || '',
     name: item?.name || '',
     unit: item?.unit || 'м2',
     formulaName: item?.formulaName || '',
@@ -147,6 +149,8 @@ function normalizeMaterialItem(item, supplier = 'ТехноНИКОЛЬ') {
   return {
     id: item?.id || uuid(),
     code: item?.code || '',
+    cellCode: item?.cellCode || '',
+    itemCode: item?.itemCode || '',
     name: item?.name || '',
     supplier: item?.supplier || supplier,
     unit: item?.unit || 'м2',
@@ -186,6 +190,7 @@ function normalizeZone(zone) {
     customParams: Array.isArray(zone?.customParams)
       ? zone.customParams.map(normalizeCustomParam)
       : [],
+    templateMeta: zone?.templateMeta || null,
     sections: Array.isArray(zone?.sections) && zone.sections.length
       ? zone.sections.map((section) => normalizeSection(section, supplierType))
       : [createEmptySection()]
@@ -218,7 +223,19 @@ function buildScope(zone) {
     PD: toNumber(zone?.roofParams?.parapetDrains, 0),
     OD: toNumber(zone?.roofParams?.parapetDrains, 0),
     ID: toNumber(zone?.roofParams?.innerDrains, 0),
-    A: toNumber(zone?.roofParams?.aerators, 0)
+    A: toNumber(zone?.roofParams?.aerators, 0),
+    roof_area: toNumber(zone?.roofParams?.area, 0),
+    parapet_perimeter: toNumber(zone?.roofParams?.perimeter, 0),
+    inner_drains_count: toNumber(zone?.roofParams?.innerDrains, 0),
+    outer_drains_count: toNumber(zone?.roofParams?.parapetDrains, 0),
+    aerators_count: toNumber(zone?.roofParams?.aerators, 0)
+  }
+
+  for (const [key, rawValue] of Object.entries(zone?.templateMeta?.paramValues || {})) {
+    const number = Number(rawValue)
+    if (Number.isFinite(number)) {
+      scope[key] = number
+    }
   }
 
   for (const param of zone?.customParams || []) {
@@ -255,14 +272,14 @@ function normalizeExpression(expression) {
     .trim()
 }
 
-function evaluateExpression(expression, zone, coefficientsDb) {
+function evaluateExpression(expression, zone, coefficientsDb, scope = null) {
   const expr = normalizeExpression(expression || '0')
   if (!expr) return 0
 
   const prepared = replaceCoefficients(expr, coefficientsDb)
 
   try {
-    const value = evaluate(prepared, buildScope(zone))
+    const value = evaluate(prepared, scope || buildScope(zone))
     return round3(value)
   } catch {
     return 0
@@ -551,13 +568,15 @@ export function useCalculatorFacade() {
   function recalculateVolumes() {
     for (const zone of estimateZones.value) {
       applySupplierToZone(zone)
+      const scope = buildScope(zone)
 
       for (const section of zone.sections || []) {
         for (const work of section.works || []) {
           work.qty = evaluateExpression(
             work.expression,
             zone,
-            coefficientsDbInternal.value
+            coefficientsDbInternal.value,
+            scope
           )
 
           const found = findWorkByName(work.name)
@@ -566,13 +585,19 @@ export function useCalculatorFacade() {
           }
 
           work.total = round2(work.qty * toNumber(work.price, 0))
+
+          const stableCode = `${work.cellCode || work.code || ''}`.trim()
+          if (stableCode) {
+            scope[stableCode] = toNumber(work.qty, 0)
+          }
         }
 
         for (const material of section.materials || []) {
           material.qty = evaluateExpression(
             material.expression,
             zone,
-            coefficientsDbInternal.value
+            coefficientsDbInternal.value,
+            scope
           )
 
           const found = findMaterialByName(material.name)
@@ -581,6 +606,11 @@ export function useCalculatorFacade() {
           }
 
           material.total = round2(material.qty * toNumber(material.price, 0))
+
+          const stableCode = `${material.cellCode || material.code || ''}`.trim()
+          if (stableCode) {
+            scope[stableCode] = toNumber(material.qty, 0)
+          }
         }
       }
     }

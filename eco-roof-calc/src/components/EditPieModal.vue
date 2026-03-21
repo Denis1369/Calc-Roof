@@ -72,6 +72,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { getVisibleTemplateParams, sanitizeTemplateParamValues } from '../shared/utils/templateParamVisibility'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -106,27 +107,12 @@ watch(
   { immediate: true, deep: true }
 )
 
-const visibleParams = computed(() => {
-  const base = Array.isArray(props.system?.параметры) ? [...props.system.параметры] : []
-  const selected = new Set(localSelectedKeys.value)
-
-  for (const option of props.system?.опции || []) {
-    if (!selected.has(option.key)) continue
-    for (const param of option.params || []) {
-      base.push(param)
-      if (localParamValues.value[param.key] === undefined) {
-        localParamValues.value[param.key] = param.value
-      }
-    }
-  }
-
-  return base
-})
+const visibleParams = computed(() => getVisibleTemplateParams(props.system, localSelectedKeys.value))
 
 function submit() {
   emit('submit', {
     selectedKeys: [...localSelectedKeys.value],
-    paramValues: { ...localParamValues.value }
+    paramValues: sanitizeTemplateParamValues(props.system, localSelectedKeys.value, localParamValues.value)
   })
 }
 </script>

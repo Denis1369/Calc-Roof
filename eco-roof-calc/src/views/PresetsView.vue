@@ -2,8 +2,29 @@
   <div class="presets-page">
     <header class="page-header">
       <h1 class="ui-title">Выбор кровельной системы</h1>
-      <p class="page-subtitle">Выберите готовую систему и сформируйте смету в несколько шагов</p>
+      <p class="page-subtitle">Выберите готовую систему, отредактируйте параметры и при необходимости сохраните пресет</p>
     </header>
+
+    <section v-if="savedPresets.length" class="saved-section page-card">
+      <div class="saved-header">
+        <div>
+          <h2 class="section-title">Сохранённые пресеты</h2>
+          <p class="section-subtitle">Их можно открыть, изменить и сразу отправить в смету</p>
+        </div>
+      </div>
+
+      <div class="saved-grid">
+        <div v-for="preset in savedPresets" :key="preset.id" class="saved-card ui-card-soft">
+          <div class="saved-title">{{ preset.title || 'Без названия' }}</div>
+          <div class="saved-meta">{{ resolveSystemName(preset.system_code) }}</div>
+          <div class="saved-actions">
+            <button class="ui-btn ui-btn-secondary mini-btn" @click="openPresetForEstimate(preset)">В смету</button>
+            <button class="ui-btn ui-btn-secondary mini-btn" @click="editPreset(preset)">Редактировать</button>
+            <button class="ui-btn ui-btn-danger mini-btn" @click="removePreset(preset)">Удалить</button>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <div v-if="loading" class="loading-block ui-card-soft">Загрузка систем...</div>
 
@@ -15,12 +36,7 @@
         @click="openSystem(system)"
       >
         <div class="card-image-placeholder" :style="{ background: getGradient(index) }">
-          <img
-            v-if="system.превью"
-            :src="system.превью"
-            class="card-image"
-            alt=""
-          />
+          <img v-if="system.превью" :src="system.превью" class="card-image" alt="" />
           <span v-else class="icon">{{ getIcon(system.название) }}</span>
         </div>
 
@@ -57,6 +73,14 @@
       @close="closeParams"
       @back="backToOptions"
       @submit="handleParamsSubmit"
+      @save-preset="handleSavePreset"
+    />
+
+    <PresetNameModal
+      :is-open="isPresetNameOpen"
+      :title="presetDraftTitle"
+      @close="closePresetNameModal"
+      @submit="submitPresetName"
     />
   </div>
 </template>
@@ -68,35 +92,76 @@ import { usePresetsFacade } from '../features/presets/usePresetsFacade'
 import { buildEstimateFromSystem, storePendingGeneratedEstimate } from '../utils/templateEstimateBuilder'
 import TemplateOptionsModal from '../components/TemplateOptionsModal.vue'
 import TemplateParamsModal from '../components/TemplateParamsModal.vue'
+import PresetNameModal from '../components/PresetNameModal.vue'
+import * as templateEnhancements from '../shared/templateSystemEnhancements'
+
+const sanitizeParamValues = templateEnhancements.sanitizeParamValues || templateEnhancements.sanitizeTemplateParamValues || ((_system = {}, _selectedKeys = [], values = {}) => ({ ...(values || {}) }))
 
 const router = useRouter()
 
 const {
   loading,
   systems,
+  savedPresets,
   selectedSystem,
   loadSystems,
-  selectSystem
+  selectSystem,
+  loadSavedPresets,
+  savePresetConfig,
+  deletePresetConfig
 } = usePresetsFacade()
 
 const selectedOptionKeys = ref([])
 const selectedParamValues = ref({})
-
 const isOptionsOpen = ref(false)
 const isParamsOpen = ref(false)
+const isPresetNameOpen = ref(false)
+const editingPresetId = ref(null)
+const presetDraftTitle = ref('')
 
-onMounted(loadSystems)
+onMounted(async () => {
+  await loadSystems()
+  await loadSavedPresets()
+})
 
 async function openSystem(system) {
   const fullSystem = await selectSystem(system.код || system.code)
   if (!fullSystem) return
 
+  editingPresetId.value = null
+  presetDraftTitle.value = ''
   selectedOptionKeys.value = (fullSystem.опции || [])
     .filter((option) => option.default)
     .map((option) => option.key)
-
   selectedParamValues.value = {}
   isOptionsOpen.value = true
+}
+
+async function editPreset(preset) {
+  const fullSystem = await selectSystem(preset.system_code)
+  if (!fullSystem) return
+
+  editingPresetId.value = preset.id
+  presetDraftTitle.value = preset.title || ''
+  selectedOptionKeys.value = Array.isArray(preset.selectedKeys) ? [...preset.selectedKeys] : []
+  selectedParamValues.value = { ...(preset.params || {}) }
+  isOptionsOpen.value = true
+}
+
+async function openPresetForEstimate(preset) {
+  const fullSystem = await selectSystem(preset.system_code)
+  if (!fullSystem) return
+
+  const selectedKeys = Array.isArray(preset.selectedKeys) ? [...preset.selectedKeys] : []
+  const paramValues = sanitizeParamValues(fullSystem, selectedKeys, preset.params || {})
+
+  const estimate = await buildEstimateFromSystem(fullSystem, selectedKeys, paramValues)
+  storePendingGeneratedEstimate(estimate)
+  router.push('/calculator')
+}
+
+async function removePreset(preset) {
+  await deletePresetConfig(preset.id)
 }
 
 function closeOptions() {
@@ -112,8 +177,13 @@ function backToOptions() {
   isOptionsOpen.value = true
 }
 
+function closePresetNameModal() {
+  isPresetNameOpen.value = false
+}
+
 function handleOptionsContinue(keys) {
   selectedOptionKeys.value = [...keys]
+  selectedParamValues.value = sanitizeParamValues(selectedSystem.value, selectedOptionKeys.value, selectedParamValues.value)
   isOptionsOpen.value = false
   isParamsOpen.value = true
 }
@@ -121,7 +191,7 @@ function handleOptionsContinue(keys) {
 async function handleParamsSubmit(values) {
   if (!selectedSystem.value) return
 
-  selectedParamValues.value = { ...values }
+  selectedParamValues.value = sanitizeParamValues(selectedSystem.value, selectedOptionKeys.value, values)
 
   const estimate = await buildEstimateFromSystem(
     selectedSystem.value,
@@ -132,6 +202,34 @@ async function handleParamsSubmit(values) {
   storePendingGeneratedEstimate(estimate)
   isParamsOpen.value = false
   router.push('/calculator')
+}
+
+function handleSavePreset(values) {
+  selectedParamValues.value = sanitizeParamValues(selectedSystem.value, selectedOptionKeys.value, values)
+  isPresetNameOpen.value = true
+}
+
+async function submitPresetName(title) {
+  if (!selectedSystem.value) return
+
+  const normalizedTitle = title || `${selectedSystem.value.название} ${new Date().toLocaleDateString('ru-RU')}`
+
+  await savePresetConfig({
+    id: editingPresetId.value,
+    systemCode: selectedSystem.value.код || selectedSystem.value.code,
+    title: normalizedTitle,
+    params: selectedParamValues.value,
+    features: {
+      selectedKeys: [...selectedOptionKeys.value]
+    }
+  })
+
+  presetDraftTitle.value = normalizedTitle
+  isPresetNameOpen.value = false
+}
+
+function resolveSystemName(code) {
+  return systems.value.find((item) => item.код === code)?.название || code || 'Система'
 }
 
 function getGradient(index) {
@@ -161,39 +259,85 @@ function getBaseLabel(value) {
 
 function getHydroLabel(value) {
   const text = `${value || ''}`.toLowerCase()
-  if (text.includes('brm') || text.includes('бит')) return 'БРМ'
-  return 'ПВХ'
+  if (text.includes('pvc') || text.includes('пвх')) return 'ПВХ-мембрана'
+  if (text.includes('brm') || text.includes('брм') || text.includes('битум')) return 'БРМ'
+  return value || 'Не указано'
 }
 </script>
 
 <style scoped>
 .presets-page {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 .page-header {
-  text-align: center;
-  margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-subtitle {
-  margin: 10px 0 0;
   color: var(--text-soft);
-  font-size: 15px;
+  margin: 0;
+}
+
+.saved-section {
+  padding: 20px;
+}
+
+.saved-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  margin: 0;
+}
+
+.section-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+}
+
+.saved-grid,
+.systems-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.saved-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.saved-title {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.saved-meta {
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.saved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .loading-block {
-  padding: 24px;
+  padding: 20px;
   text-align: center;
-  color: var(--text-soft);
-}
-
-.systems-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
 }
 
 .system-card {
@@ -258,58 +402,36 @@ function getHydroLabel(value) {
 }
 
 .badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 6px 10px;
   font-size: 12px;
   font-weight: 700;
-  padding: 7px 10px;
-  border-radius: 8px;
-  display: inline-block;
-  width: fit-content;
 }
 
 .badge-accent {
-  background: var(--accent-soft);
+  background: rgba(37, 99, 235, 0.1);
   color: var(--accent);
-  border: 1px solid var(--accent);
 }
 
 .card-footer {
-  padding: 14px 20px;
-  background: var(--bg-card-soft);
-  border-top: 1px solid var(--border-color);
+  padding: 0 20px 20px;
+}
+
+.calculate-btn,
+.mini-btn {
+  cursor: pointer;
 }
 
 .calculate-btn {
   width: 100%;
-  background: none;
   border: none;
-  color: var(--accent);
+  border-radius: 12px;
+  padding: 12px 14px;
   font-weight: 700;
-  cursor: pointer;
-  text-align: right;
-  transition: color var(--transition-fast);
-  font-size: 15px;
-}
-
-.system-card:hover .calculate-btn {
-  color: var(--accent-hover);
-}
-
-@media (max-width: 700px) {
-  .presets-page {
-    padding: 16px;
-  }
-
-  .systems-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .card-content {
-    padding: 16px;
-  }
-
-  .card-footer {
-    padding: 12px 16px;
-  }
+  background: var(--accent);
+  color: #fff;
 }
 </style>

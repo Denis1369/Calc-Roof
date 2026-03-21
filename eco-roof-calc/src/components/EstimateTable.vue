@@ -6,7 +6,7 @@
       <table class="data-table" :class="type === 'work' ? 'works-table' : 'mat-table'">
         <thead>
           <tr>
-            <th class="col-code">Код</th>
+            <th class="col-code">Код ячейки</th>
             <th class="col-name">Наименование {{ type === 'work' ? 'работ' : 'материалов' }}</th>
             <th v-if="type === 'material'" class="col-variant">Профиль / вариант</th>
             <th v-if="type === 'material'" class="col-thickness">Толщина, мм</th>
@@ -22,8 +22,8 @@
 
         <tbody>
           <tr v-for="(item, idx) in items" :key="item.id || item.key || idx">
-            <td class="center bold accent-text" :title="`Код: [${item.code || ''}]`">
-              {{ item.code }}
+            <td class="center bold accent-text" :title="buildCodeTitle(item)">
+              {{ item.code || '—' }}
             </td>
 
             <td>
@@ -98,7 +98,7 @@
                 @input="$emit('recalculate')"
                 list="formulas-list"
                 class="cell-input formula-input center"
-                placeholder="Напр: S * 1.1"
+                placeholder="Напр: C47 * 1.15 или ((C47/3)+C130+C131)/25"
               />
             </td>
 
@@ -143,6 +143,26 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['changeName', 'changeFormula', 'recalculate', 'remove', 'add'])
+
+function buildCodeTitle(item) {
+  const cellCode = `${item?.code || ''}`.trim()
+  const itemCode = `${item?.itemCode || item?.productCode || ''}`.trim()
+
+  if (cellCode && itemCode) {
+    return `Код ячейки: ${cellCode}\nКод товара: ${itemCode}`
+  }
+
+  if (cellCode) {
+    return `Код ячейки: ${cellCode}`
+  }
+
+  if (itemCode) {
+    return `Код товара: ${itemCode}`
+  }
+
+  return 'Код ячейки не задан'
+}
+
 
 const totalSum = computed(() => {
   return props.items.reduce((sum, i) => sum + ((i.qty || 0) * (i.price || 0)), 0)
@@ -252,7 +272,7 @@ function applyMaterialLookup(item, payload, emitRecalculate) {
     item.profileThickness = Number(item.profileThickness || item.thickness || 0.8)
     item.thickness = Number(item.profileThickness || 0.8)
     item.thickness_unit = 'мм'
-    item.code = buildProfileSheetCode(item)
+    item.itemCode = buildProfileSheetCode(item)
 
     if (emitRecalculate) emit('recalculate')
     return
@@ -280,8 +300,8 @@ function resolveSelectedVariant(item) {
     if (selected) return selected
   }
 
-  if (item.code) {
-    selected = item.variantOptions.find(variant => `${variant.sku || ''}` === `${item.code || ''}`)
+  if (item.itemCode) {
+    selected = item.variantOptions.find(variant => `${variant.sku || ''}` === `${item.itemCode || ''}`)
     if (selected) return selected
   }
 
@@ -309,14 +329,14 @@ function handleProfileVariantChange(item) {
   item.variant_label = selected.variant_label || selected.profile_name || ''
   item.name = `Профлист ${selected.profile_name || selected.variant_label || ''}`.trim()
   item.price = Number(selected.price || item.price || 0)
-  item.code = buildProfileSheetCode(item, selected)
+  item.itemCode = buildProfileSheetCode(item, selected)
   emit('recalculate')
 }
 
 function handleThicknessChange(item) {
   item.thickness = Number(item.profileThickness || 0)
   item.thickness_unit = 'мм'
-  item.code = buildProfileSheetCode(item)
+  item.itemCode = buildProfileSheetCode(item)
   emit('recalculate')
 }
 
@@ -332,7 +352,7 @@ function applyVariantToItem(item, variant, emitRecalculate) {
   item.selectedVariantId = variant.id
   item.thickness = variant.thickness_mm || 0
   item.thickness_unit = 'мм'
-  item.code = variant.sku || item.code
+  item.itemCode = variant.sku || item.itemCode
   item.price = Number(variant.price || 0)
   item.variant_label = variant.variant_label || ''
   if (emitRecalculate) {

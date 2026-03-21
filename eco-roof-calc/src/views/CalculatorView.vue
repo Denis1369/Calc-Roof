@@ -281,12 +281,27 @@
       </section>
     </div>
 
-    <EditPieModal
-      :is-open="isEditPieModalOpen"
+    <TemplateOptionsModal
+      :is-open="isEditOptionsOpen"
       :system="editPieSystem"
-      :initial-selected-keys="editPieSelectedKeys"
-      :initial-param-values="editPieParamValues"
-      @close="closeEditPieModal"
+      :selected-keys="editPieSelectedKeys"
+      title="Редактирование пирога · шаг 1"
+      continue-label="Далее"
+      cancel-label="Отмена"
+      @close="closeEditFlow"
+      @continue="handleEditOptionsContinue"
+    />
+
+    <TemplateParamsModal
+      :is-open="isEditParamsOpen"
+      :system="editPieSystem"
+      :selected-keys="editPieSelectedKeys"
+      :initial-values="editPieParamValues"
+      title="Редактирование пирога · шаг 2"
+      submit-label="Применить"
+      back-label="Назад"
+      @close="closeEditFlow"
+      @back="backToEditOptions"
       @submit="applyEditPieModal"
     />
 
@@ -310,7 +325,8 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useCalculator } from '../composables/useCalculator.js'
 import EstimateTable from '../components/EstimateTable.vue'
-import EditPieModal from '../components/EditPieModal.vue'
+import TemplateOptionsModal from '../components/TemplateOptionsModal.vue'
+import TemplateParamsModal from '../components/TemplateParamsModal.vue'
 import { applyPendingGeneratedEstimate, buildEstimateFromSystem } from '../utils/templateEstimateBuilder'
 import { getSystemTemplate } from '../application/systems/getSystemTemplate'
 import { toSystemTemplateView } from '../shared/adapters/systemViewAdapter'
@@ -355,7 +371,8 @@ const {
   printEstimate
 } = useCalculator()
 
-const isEditPieModalOpen = ref(false)
+const isEditOptionsOpen = ref(false)
+const isEditParamsOpen = ref(false)
 const editPieZoneIndex = ref(null)
 const editPieSystem = ref(null)
 const editPieSelectedKeys = ref([])
@@ -372,35 +389,49 @@ async function openEditPieModal(zone, zoneIndex) {
   editPieZoneIndex.value = zoneIndex
   editPieSelectedKeys.value = Array.isArray(meta.selectedKeys) ? [...meta.selectedKeys] : []
   editPieParamValues.value = { ...(meta.paramValues || {}) }
-  isEditPieModalOpen.value = true
+  isEditOptionsOpen.value = true
 }
 
-function closeEditPieModal() {
-  isEditPieModalOpen.value = false
+function closeEditFlow() {
+  isEditOptionsOpen.value = false
+  isEditParamsOpen.value = false
   editPieZoneIndex.value = null
   editPieSystem.value = null
   editPieSelectedKeys.value = []
   editPieParamValues.value = {}
 }
 
-async function applyEditPieModal(payload) {
+function handleEditOptionsContinue(keys) {
+  editPieSelectedKeys.value = [...keys]
+  isEditOptionsOpen.value = false
+  isEditParamsOpen.value = true
+}
+
+function backToEditOptions() {
+  isEditParamsOpen.value = false
+  isEditOptionsOpen.value = true
+}
+
+async function applyEditPieModal(values) {
   if (editPieZoneIndex.value === null || !editPieSystem.value) return
+
+  editPieParamValues.value = { ...(values || {}) }
 
   const rebuilt = await buildEstimateFromSystem(
     editPieSystem.value,
-    payload.selectedKeys || [],
-    payload.paramValues || {}
+    editPieSelectedKeys.value,
+    editPieParamValues.value
   )
 
   const newZone = rebuilt?.estimateZones?.[0]
   if (!newZone) {
-    closeEditPieModal()
+    closeEditFlow()
     return
   }
 
   const currentZone = estimateZones.value[editPieZoneIndex.value]
   if (!currentZone) {
-    closeEditPieModal()
+    closeEditFlow()
     return
   }
 
@@ -414,7 +445,7 @@ async function applyEditPieModal(payload) {
   }
 
   recalculateVolumes()
-  closeEditPieModal()
+  closeEditFlow()
 }
 
 onMounted(async () => {

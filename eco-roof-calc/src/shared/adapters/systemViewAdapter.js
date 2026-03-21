@@ -3,6 +3,51 @@ function normalizeOptions(options) {
   return options.map((item) => `${item}`).filter(Boolean)
 }
 
+function normalizeText(value) {
+  return `${value || ''}`
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[_/\\-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function hasAny(text, patterns) {
+  return patterns.some((pattern) => text.includes(pattern))
+}
+
+function detectFeatureKind(featureCode, featureName = '') {
+  const text = normalizeText(`${featureCode || ''} ${featureName || ''}`)
+
+  if (hasAny(text, ['внутренн ворон', 'inner drain', 'inner drains', 'id'])) return 'inner_drains'
+  if (hasAny(text, ['внешн ворон', 'outer drain', 'outer drains', 'наружн водосток'])) return 'outer_drains'
+  if (hasAny(text, ['аэратор', 'aerator'])) return 'aerators'
+  if (hasAny(text, ['парапет', 'примык'])) return 'parapets'
+  if (hasAny(text, ['ветров'])) return 'wind_zones'
+  if (hasAny(text, ['гофр', 'l проф', 'l образ', 'l-образ'])) return 'fill_corrugations'
+  if (hasAny(text, ['дорожк', 'walkway'])) return 'walkways'
+  if (hasAny(text, ['карниз'])) return 'eaves'
+  if (hasAny(text, ['контруклон'])) return 'counter_slopes'
+  if (hasAny(text, ['деформацион'])) return 'deformation_joints'
+  if (hasAny(text, ['фахверк'])) return 'half_timber_posts'
+  if (hasAny(text, ['дымоудал'])) return 'smoke_hatches'
+  if (hasAny(text, ['противопожар'])) return 'fire_breaks'
+  if (hasAny(text, ['ов вк', 'ов/вк', 'hvac'])) return 'hvac_nodes'
+  if (hasAny(text, ['тумб', 'подставк'])) return 'pedestals'
+  if (hasAny(text, ['воздухозабор'])) return 'air_intakes'
+  if (hasAny(text, ['промышленн вентил'])) return 'industrial_fans'
+  if (hasAny(text, ['вытяжк', 'дефлектор'])) return 'exhausts'
+  if (hasAny(text, ['кондиционер'])) return 'ac_blocks'
+  if (hasAny(text, ['гусак'])) return 'goosenecks'
+  if (hasAny(text, ['малого сечения'])) return 'small_penetrations'
+  if (hasAny(text, ['среднего сечения'])) return 'medium_penetrations'
+  if (hasAny(text, ['прочие проходк', 'pass through'])) return 'other_penetrations'
+  if (hasAny(text, ['вентиляционн шахт', 'вентшахт'])) return 'ventilation_shafts'
+  if (hasAny(text, ['ограждени'])) return 'roof_fencing'
+
+  return normalizeText(featureCode)
+}
+
 function inferParamGroup(code) {
   const key = `${code || ''}`.toLowerCase()
 
@@ -37,94 +82,336 @@ function toParamValue(param) {
   return param.default_value ?? ''
 }
 
-function getSyntheticFeatureParams(featureCode) {
-  const code = `${featureCode || ''}`.toLowerCase()
-
-  if (code === 'inner_drains') {
-    return [
-      {
-        key: 'inner_drains_count',
-        label: 'Количество внутренних воронок',
-        type: 'number',
-        unit: 'шт',
-        value: 1,
-        group: 'additional',
-        description: 'Количество внутренних водоприемных воронок'
-      }
-    ]
+function numberParam({ key, label, unit, value = 0, description = '', group = 'additional' }) {
+  return {
+    key,
+    label,
+    type: 'number',
+    unit,
+    value,
+    group,
+    description
   }
+}
 
-  if (code === 'outer_drains') {
-    return [
-      {
-        key: 'outer_drains_count',
-        label: 'Количество внешних воронок',
-        type: 'number',
-        unit: 'шт',
-        value: 1,
-        group: 'additional',
-        description: 'Количество внешних воронок или элементов наружного водоотведения'
-      }
-    ]
+function getSyntheticFeatureParams(featureCode, featureName = '') {
+  switch (detectFeatureKind(featureCode, featureName)) {
+    case 'inner_drains':
+      return [
+        numberParam({
+          key: 'inner_drains_count',
+          label: 'Количество внутренних воронок',
+          unit: 'шт',
+          value: 1,
+          description: 'Количество внутренних водоприемных воронок'
+        }),
+        numberParam({
+          key: 'inner_drain_reinforcement_count',
+          label: 'Усиления воронок',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество усилений мест внутренних воронок'
+        })
+      ]
+
+    case 'outer_drains':
+      return [
+        numberParam({
+          key: 'outer_drains_count',
+          label: 'Количество внешних воронок',
+          unit: 'шт',
+          value: 1,
+          description: 'Количество внешних воронок или элементов наружного водоотведения'
+        })
+      ]
+
+    case 'aerators':
+      return [
+        numberParam({
+          key: 'aerators_count',
+          label: 'Количество аэраторов',
+          unit: 'шт',
+          value: 1,
+          description: 'Количество кровельных аэраторов'
+        })
+      ]
+
+    case 'parapets':
+      return [
+        numberParam({
+          key: 'parapet_perimeter',
+          label: 'Периметр примыканий',
+          unit: 'м/п',
+          value: 0,
+          description: 'Суммарная длина примыканий к парапету'
+        }),
+        numberParam({
+          key: 'parapet_caps_length',
+          label: 'Парапетные крышки',
+          unit: 'м/п',
+          value: 0,
+          description: 'Длина парапетных крышек'
+        }),
+        numberParam({
+          key: 'v_sr_area',
+          label: 'Усиление углов/парапетов V-SR',
+          unit: 'м2',
+          value: 0,
+          description: 'Площадь мембраны V-SR на углы и усиления'
+        })
+      ]
+
+    case 'fill_corrugations':
+      return [
+        numberParam({
+          key: 'corrugation_fill_length',
+          label: 'Заполнение гофр',
+          unit: 'м/п',
+          value: 0,
+          description: 'Длина участков заполнения гофр'
+        }),
+        numberParam({
+          key: 'l_profile_length',
+          label: 'L-профиль',
+          unit: 'м/п',
+          value: 0,
+          description: 'Суммарная длина L-образного профиля'
+        })
+      ]
+
+    case 'walkways':
+      return [
+        numberParam({
+          key: 'walkways_length',
+          label: 'Длина пешеходных дорожек',
+          unit: 'м/п',
+          value: 0,
+          description: 'Общая длина пешеходных дорожек'
+        }),
+        numberParam({
+          key: 'walkway_puzzle_count',
+          label: 'Пешеходные дорожки Puzzle',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество элементов Walkway Puzzle'
+        })
+      ]
+
+    case 'eaves':
+      return [
+        numberParam({
+          key: 'eaves_length',
+          label: 'Карнизный свес',
+          unit: 'м/п',
+          value: 0,
+          description: 'Суммарная длина карнизного свеса'
+        })
+      ]
+
+    case 'counter_slopes':
+      return [
+        numberParam({
+          key: 'counter_slope_area',
+          label: 'Контруклоны',
+          unit: 'м2',
+          value: 0,
+          description: 'Площадь контруклонов'
+        })
+      ]
+
+    case 'deformation_joints':
+      return [
+        numberParam({
+          key: 'deformation_joint_length',
+          label: 'Длина деформационных швов',
+          unit: 'м/п',
+          value: 0,
+          description: 'Суммарная длина деформационных швов'
+        }),
+        numberParam({
+          key: 'deformation_joint_profile_length',
+          label: 'Профиль усиления деформационного шва',
+          unit: 'м/п',
+          value: 0,
+          description: 'Длина профилей усиления деформационных швов'
+        })
+      ]
+
+    case 'half_timber_posts':
+      return [
+        numberParam({
+          key: 'half_timber_posts_count',
+          label: 'Стойки фахверка',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество стоек фахверка'
+        })
+      ]
+
+    case 'smoke_hatches':
+      return [
+        numberParam({
+          key: 'smoke_hatches_count',
+          label: 'Люки дымоудаления',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество люков дымоудаления'
+        })
+      ]
+
+    case 'fire_breaks':
+      return [
+        numberParam({
+          key: 'fire_break_area',
+          label: 'Противопожарные рассечки',
+          unit: 'м2',
+          value: 0,
+          description: 'Площадь противопожарных рассечек'
+        })
+      ]
+
+    case 'hvac_nodes':
+      return [
+        numberParam({
+          key: 'hvac_nodes_count',
+          label: 'Узлы ОВ / ВК',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество узлов ОВ/ВК'
+        })
+      ]
+
+    case 'pedestals':
+      return [
+        numberParam({
+          key: 'pedestals_count',
+          label: 'Тумбы и кровельные подставки',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество тумб и кровельных подставок'
+        })
+      ]
+
+    case 'air_intakes':
+      return [
+        numberParam({
+          key: 'air_intakes_count',
+          label: 'Воздухозаборы',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество воздухозаборов'
+        })
+      ]
+
+    case 'industrial_fans':
+      return [
+        numberParam({
+          key: 'industrial_fans_count',
+          label: 'Промышленные вентиляторы',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество промышленных вентиляторов'
+        })
+      ]
+
+    case 'exhausts':
+      return [
+        numberParam({
+          key: 'exhausts_count',
+          label: 'Вытяжки и дефлекторы',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество вытяжек и дефлекторов'
+        })
+      ]
+
+    case 'ac_blocks':
+      return [
+        numberParam({
+          key: 'ac_blocks_count',
+          label: 'Стойки блоков кондиционеров',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество стоек под блоки кондиционеров'
+        })
+      ]
+
+    case 'goosenecks':
+      return [
+        numberParam({
+          key: 'goosenecks_count',
+          label: 'Гусаки для ввода кабеля',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество примыканий к гусакам'
+        })
+      ]
+
+    case 'small_penetrations':
+      return [
+        numberParam({
+          key: 'small_penetrations_count',
+          label: 'Проходки малого сечения',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество проходок малого сечения'
+        })
+      ]
+
+    case 'medium_penetrations':
+      return [
+        numberParam({
+          key: 'medium_penetrations_count',
+          label: 'Проходки среднего сечения',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество проходок среднего сечения'
+        })
+      ]
+
+    case 'other_penetrations':
+      return [
+        numberParam({
+          key: 'pass_through_count',
+          label: 'Прочие проходки',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество прочих проходок через кровлю'
+        })
+      ]
+
+    case 'ventilation_shafts':
+      return [
+        numberParam({
+          key: 'ventilation_shafts_count',
+          label: 'Вентиляционные шахты',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество вентиляционных шахт'
+        })
+      ]
+
+    case 'roof_fencing':
+      return [
+        numberParam({
+          key: 'roof_fencing_length',
+          label: 'Кровельное ограждение',
+          unit: 'м/п',
+          value: 0,
+          description: 'Длина кровельного ограждения'
+        }),
+        numberParam({
+          key: 'roof_fencing_posts_count',
+          label: 'Стойки ограждения',
+          unit: 'шт',
+          value: 0,
+          description: 'Количество стоек ограждения'
+        })
+      ]
+
+    default:
+      return []
   }
-
-  if (code === 'aerators') {
-    return [
-      {
-        key: 'aerators_count',
-        label: 'Количество аэраторов',
-        type: 'number',
-        unit: 'шт',
-        value: 1,
-        group: 'additional',
-        description: 'Количество кровельных аэраторов'
-      }
-    ]
-  }
-
-  if (code === 'walkways') {
-    return [
-      {
-        key: 'walkways_length',
-        label: 'Длина пешеходных дорожек',
-        type: 'number',
-        unit: 'м/п',
-        value: 0,
-        group: 'additional',
-        description: 'Общая длина пешеходных дорожек'
-      }
-    ]
-  }
-
-  if (code === 'deformation_joints') {
-    return [
-      {
-        key: 'deformation_joint_length',
-        label: 'Длина деформационных швов',
-        type: 'number',
-        unit: 'м/п',
-        value: 0,
-        group: 'additional',
-        description: 'Суммарная длина деформационных швов'
-      }
-    ]
-  }
-
-  if (code === 'pass_throughs') {
-    return [
-      {
-        key: 'pass_through_count',
-        label: 'Количество проходок',
-        type: 'number',
-        unit: 'шт',
-        value: 0,
-        group: 'additional',
-        description: 'Количество проходных элементов'
-      }
-    ]
-  }
-
-  return []
 }
 
 export function toSystemListItem(system) {
@@ -162,7 +449,7 @@ export function toSystemTemplateView(fullSystem) {
     key: feature.code,
     label: feature.name,
     default: Boolean(feature.is_default),
-    params: getSyntheticFeatureParams(feature.code)
+    params: getSyntheticFeatureParams(feature.code, feature.name)
   }))
 
   return {

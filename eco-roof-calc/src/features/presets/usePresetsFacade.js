@@ -1,10 +1,22 @@
-﻿import { ref } from 'vue'
+import { ref } from 'vue'
 import { listSystems } from '../../application/systems/listSystems'
 import { getSystemTemplate } from '../../application/systems/getSystemTemplate'
 import {
   toSystemListItem,
   toSystemTemplateView
 } from '../../shared/adapters/systemViewAdapter'
+import { SystemRepository } from '../../infrastructure/repositories/SystemRepository'
+
+const systemRepository = new SystemRepository()
+
+function normalizePresetRow(row) {
+  return {
+    ...row,
+    selectedKeys: Array.isArray(row?.features?.selectedKeys)
+      ? row.features.selectedKeys
+      : []
+  }
+}
 
 export function usePresetsFacade() {
   const loading = ref(false)
@@ -12,6 +24,7 @@ export function usePresetsFacade() {
 
   const systems = ref([])
   const selectedSystem = ref(null)
+  const savedPresets = ref([])
 
   async function loadSystems() {
     loading.value = true
@@ -45,12 +58,37 @@ export function usePresetsFacade() {
     }
   }
 
+  async function loadSavedPresets() {
+    try {
+      const rows = await systemRepository.listSavedSystemConfigs()
+      savedPresets.value = rows.map(normalizePresetRow)
+    } catch (err) {
+      console.error(err)
+      error.value = err?.message || 'Не удалось загрузить пресеты'
+    }
+  }
+
+  async function savePresetConfig(payload) {
+    const saved = await systemRepository.saveSystemConfig(payload)
+    await loadSavedPresets()
+    return normalizePresetRow(saved)
+  }
+
+  async function deletePresetConfig(id) {
+    await systemRepository.deleteSystemConfig(id)
+    await loadSavedPresets()
+  }
+
   return {
     loading,
     error,
     systems,
     selectedSystem,
+    savedPresets,
     loadSystems,
-    selectSystem
+    selectSystem,
+    loadSavedPresets,
+    savePresetConfig,
+    deletePresetConfig
   }
 }

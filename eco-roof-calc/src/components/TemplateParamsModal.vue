@@ -87,6 +87,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { getVisibleTemplateParams, sanitizeTemplateParamValues } from '../shared/utils/templateParamVisibility'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
@@ -101,30 +102,7 @@ const localValues = ref({})
 const selectModes = ref({})
 const customValues = ref({})
 
-const effectiveParams = computed(() => {
-  const baseParams = Array.isArray(props.system?.параметры) ? props.system.параметры : []
-  const extraParams = []
-
-  for (const option of props.system?.опции || []) {
-    if (props.selectedKeys.includes(option.key) && Array.isArray(option.params)) {
-      extraParams.push(
-        ...option.params.map(param => ({
-          ...param,
-          group: param.group || 'additional',
-          description: param.description || `Параметр для опции «${option.label}»`
-        }))
-      )
-    }
-  }
-
-  const seen = new Set()
-
-  return [...baseParams, ...extraParams].filter(param => {
-    if (seen.has(param.key)) return false
-    seen.add(param.key)
-    return true
-  })
-})
+const effectiveParams = computed(() => getVisibleTemplateParams(props.system, props.selectedKeys))
 
 const groupedParams = computed(() => {
   const groups = {
@@ -219,7 +197,7 @@ function normalizedOptions(param) {
 }
 
 function submit() {
-  const payload = { ...localValues.value }
+  const payload = sanitizeTemplateParamValues(props.system, props.selectedKeys, localValues.value)
 
   for (const param of effectiveParams.value) {
     if (param.type === 'select') {
