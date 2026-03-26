@@ -47,10 +47,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import * as templateEnhancements from '../shared/templateSystemEnhancements'
-
-const getEnhancedTemplateMeta = templateEnhancements.getEnhancedTemplateMeta || (() => ({ options: [], params: [] }))
-const getSystemTitle = templateEnhancements.getSystemTitle || ((system = {}) => system?.название || system?.name || 'Система')
+import { getEnhancedTemplateMeta, getSystemTitle, normalizeSelectedTemplateOptionKeys } from '../shared/templateSystemEnhancements'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
@@ -74,19 +71,21 @@ watch(
     const explicitKeys = Array.isArray(props.selectedKeys) ? [...props.selectedKeys] : []
 
     if (explicitKeys.length) {
-      localSelectedKeys.value = explicitKeys
+      localSelectedKeys.value = normalizeSelectedTemplateOptionKeys(explicitKeys)
       return
     }
 
-    localSelectedKeys.value = mergedOptions.value
-      .filter((option) => option.default)
-      .map((option) => option.key)
+    localSelectedKeys.value = normalizeSelectedTemplateOptionKeys(
+      mergedOptions.value
+        .filter((option) => option.default)
+        .map((option) => option.key)
+    )
   },
   { immediate: true, deep: true }
 )
 
 function submit() {
-  emit('continue', [...localSelectedKeys.value])
+  emit('continue', normalizeSelectedTemplateOptionKeys(localSelectedKeys.value))
 }
 </script>
 

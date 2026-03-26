@@ -1,8 +1,9 @@
 ﻿import { getDb } from './client'
 import { migration001InitV2 } from './migrations/001_init_v2'
 import { migration004TemplateFormulaSupport } from './migrations/004_template_formula_support'
+import { migration005SystemDefaultOverrides } from './migrations/005_system_default_overrides'
 
-const migrations = [migration001InitV2, migration004TemplateFormulaSupport]
+const migrations = [migration001InitV2, migration004TemplateFormulaSupport, migration005SystemDefaultOverrides]
 
 async function ensureMigrationsTable(db) {
   await db.execute(`

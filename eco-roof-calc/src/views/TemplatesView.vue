@@ -1,451 +1,608 @@
 <template>
-  <div class="templates-page">
-    <div class="page-header">
-      <h1 class="ui-title">Шаблоны</h1>
-      <div class="header-actions">
-        <button class="ui-btn ui-btn-primary" @click="createNewTemplate">Новый шаблон</button>
-      </div>
-    </div>
+  <div class="system-editor-page">
+    <header class="page-header">
+      <h1 class="ui-title">Редактор систем</h1>
+      <p class="page-subtitle">Меняй то, что подставляется по умолчанию: разделы, работы, материалы, расходники и формулы.</p>
+    </header>
 
     <div class="layout">
-      <aside class="sidebar ui-card">
-        <div class="sidebar-title">Список шаблонов</div>
-
-        <div v-if="loading" class="empty-state ui-card-soft">
-          Загрузка...
+      <aside class="sidebar page-card">
+        <div class="sidebar-title">Системы</div>
+        <div v-if="loading" class="empty-state ui-card-soft">Загрузка...</div>
+        <div v-else class="system-list">
+          <button
+            v-for="system in systems"
+            :key="system.код"
+            class="system-list-item"
+            :class="{ active: system.код === selectedSystemCode }"
+            @click="openSystem(system.код)"
+          >
+            <div class="system-list-name">{{ system.название }}</div>
+            <div class="system-list-meta">{{ baseLabel(system) }} · {{ hydroLabel(system) }}</div>
+          </button>
         </div>
-
-        <div v-else-if="templates.length === 0" class="empty-state ui-card-soft">
-          Шаблонов пока нет
-        </div>
-
-        <button
-          v-for="template in templates"
-          :key="template.идентификатор"
-          class="template-list-item"
-          :class="{ active: selectedTemplateId === template.идентификатор }"
-          @click="selectTemplate(template.идентификатор)"
-        >
-          <span>{{ template.название || 'Без названия' }}</span>
-        </button>
       </aside>
 
       <section class="content">
-        <div v-if="!selectedTemplate" class="empty-editor ui-card-soft">
-          Выбери шаблон или создай новый
+        <div v-if="!selectedSystem || !editableZone" class="empty-state page-card">
+          Выбери систему слева, чтобы настроить, что должно подставляться по умолчанию.
         </div>
 
-        <div v-else class="editor-card page-card">
+        <div v-else class="page-card editor-card">
           <div class="editor-header">
-            <div class="editor-header-left">
-              <label class="ui-label">Название шаблона</label>
-              <input
-                v-model="selectedTemplate.название"
-                class="ui-input"
-                type="text"
-                placeholder="Введите название шаблона"
-              >
+            <div>
+              <h2 class="editor-title">{{ selectedSystem.название }}</h2>
+              <div class="editor-subtitle">
+                Основание: {{ baseLabel(selectedSystem) }} · Гидроизоляция: {{ hydroLabel(selectedSystem) }}
+              </div>
+              <div class="editor-hint">
+                Это редактор основы системы. Всё, что ты здесь сохранишь, будет подставляться при выборе этой системы.
+              </div>
             </div>
 
-            <div class="editor-header-actions">
-              <button class="ui-btn ui-btn-secondary" @click="addItem">Добавить пункт</button>
-              <button class="ui-btn ui-btn-success" @click="saveTemplate">Сохранить</button>
-              <button class="ui-btn ui-btn-danger" @click="deleteTemplate">Удалить</button>
+            <div class="editor-actions">
+              <button class="ui-btn ui-btn-secondary" @click="openSettings">Параметры и опции</button>
+              <button class="ui-btn ui-btn-secondary" @click="rebuildFromEtalon">Пересобрать из эталона</button>
+              <button class="ui-btn ui-btn-success" @click="saveOverride">Сохранить основу</button>
+              <button class="ui-btn ui-btn-danger" @click="resetOverride">Сбросить основу</button>
             </div>
           </div>
 
-          <div class="items-section">
-            <div v-if="selectedTemplate.data.items.length === 0" class="empty-state ui-card-soft">
-              В шаблоне пока нет пунктов
-            </div>
+          <div class="defaults-summary ui-card-soft">
+            <div><strong>Выбранные доп. опции:</strong> {{ selectedOptionLabels || 'нет' }}</div>
+            <div><strong>Параметров по умолчанию:</strong> {{ defaultParamsSummary }}</div>
+          </div>
 
-            <div
-              v-for="(item, itemIndex) in selectedTemplate.data.items"
-              :key="item.key"
-              class="item-card ui-card-soft"
-            >
-              <div class="item-top">
-                <label class="checkbox-row">
-                  <input v-model="item.checked" type="checkbox">
-                  <span>Показывать в смете</span>
-                </label>
-
-                <div class="item-actions">
-                  <button class="ui-btn ui-btn-secondary mini-btn" @click="moveItemUp(itemIndex)" :disabled="itemIndex === 0">↑</button>
-                  <button class="ui-btn ui-btn-secondary mini-btn" @click="moveItemDown(itemIndex)" :disabled="itemIndex === selectedTemplate.data.items.length - 1">↓</button>
-                  <button class="ui-btn ui-btn-danger mini-btn" @click="removeItem(itemIndex)">Удалить пункт</button>
-                </div>
+          <div class="zone-params-block">
+            <div class="zone-params-title">Базовые параметры для пересчёта формул в редакторе</div>
+            <div class="params-grid">
+              <div class="calc-group">
+                <label class="ui-label">Площадь (S, м²)</label>
+                <input v-model.number="editableZone.roofParams.area" type="number" class="ui-input" @input="recalculateZone" />
               </div>
-
-              <div class="grid-two">
-                <div>
-                  <label class="ui-label">Название пункта</label>
-                  <input
-                    v-model="item.label"
-                    class="ui-input"
-                    type="text"
-                    placeholder="Например: Усиление деформационного шва"
-                  >
-                </div>
-
-                <div>
-                  <label class="ui-label">Ключ пункта</label>
-                  <input
-                    v-model="item.key"
-                    class="ui-input"
-                    type="text"
-                    placeholder="Например: joint_reinforcement"
-                  >
-                </div>
+              <div class="calc-group">
+                <label class="ui-label">Периметр (P, пог.м)</label>
+                <input v-model.number="editableZone.roofParams.perimeter" type="number" class="ui-input" @input="recalculateZone" />
               </div>
-
-              <div v-if="item.checked" class="fields-block">
-                <div class="fields-header">
-                  <div class="fields-title">Поля ввода</div>
-                  <button class="ui-btn ui-btn-secondary small-btn" @click="addField(item)">Добавить поле</button>
-                </div>
-
-                <div
-                  v-for="(field, fieldIndex) in item.fields"
-                  :key="field.key"
-                  class="field-row ui-card"
-                >
-                  <div class="field-grid">
-                    <div>
-                      <label class="ui-label">Название поля</label>
-                      <input
-                        v-model="field.label"
-                        class="ui-input"
-                        type="text"
-                        placeholder="Например: Длина"
-                      >
-                    </div>
-
-                    <div>
-                      <label class="ui-label">Ключ поля</label>
-                      <input
-                        v-model="field.key"
-                        class="ui-input"
-                        type="text"
-                        placeholder="Например: length"
-                      >
-                    </div>
-
-                    <div>
-                      <label class="ui-label">Тип</label>
-                      <select v-model="field.type" class="ui-select">
-                        <option value="number">Число</option>
-                        <option value="text">Текст</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label class="ui-label">Ед. изм.</label>
-                      <input
-                        v-model="field.unit"
-                        class="ui-input"
-                        type="text"
-                        placeholder="м², м.п., шт"
-                      >
-                    </div>
-
-                    <div>
-                      <label class="ui-label">Значение по умолчанию</label>
-                      <input
-                        v-model="field.value"
-                        class="ui-input"
-                        :type="field.type === 'number' ? 'number' : 'text'"
-                        placeholder="0"
-                      >
-                    </div>
-                  </div>
-
-                  <div class="field-actions">
-                    <button class="ui-btn ui-btn-danger mini-btn" @click="removeField(item, fieldIndex)">
-                      Удалить поле
-                    </button>
-                  </div>
-                </div>
+              <div class="calc-group">
+                <label class="ui-label">Водоотвод (OD, шт)</label>
+                <input v-model.number="editableZone.roofParams.parapetDrains" type="number" class="ui-input" @input="recalculateZone" />
+              </div>
+              <div class="calc-group">
+                <label class="ui-label">Воронки (ID, шт)</label>
+                <input v-model.number="editableZone.roofParams.innerDrains" type="number" class="ui-input" @input="recalculateZone" />
+              </div>
+              <div class="calc-group">
+                <label class="ui-label">Аэраторы (A, шт)</label>
+                <input v-model.number="editableZone.roofParams.aerators" type="number" class="ui-input" @input="recalculateZone" />
               </div>
             </div>
+          </div>
+
+          <div v-for="(section, sIdx) in editableZone.sections" :key="section.id" class="section-block">
+            <div class="section-header">
+              <input v-model="section.title" class="section-title-input" placeholder="Название раздела" />
+              <button class="btn-icon danger-text" @click="removeSection(sIdx)">✕</button>
+            </div>
+
+            <EstimateTable
+              title="Работы:"
+              type="work"
+              :items="section.works"
+              listId="works-list-editor"
+              @changeName="onWorkNameChange($event, section)"
+              @changeFormula="recalculateZone"
+              @recalculate="recalculateZone"
+              @remove="removeWork(section, $event)"
+              @add="addWork(section)"
+            />
+
+            <EstimateTable
+              title="Материалы:"
+              type="material"
+              :items="section.materials"
+              listId="materials-list-editor"
+              @changeName="onMaterialNameChange($event, section)"
+              @changeFormula="recalculateZone"
+              @recalculate="recalculateZone"
+              @remove="removeMaterial(section, $event)"
+              @add="addMaterial(section)"
+            />
+
+            <div class="section-total-row">
+              <span class="section-total-label">Итого по разделу:</span>
+              <span class="section-total-value">{{ getSectionTotal(section).toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
+            </div>
+          </div>
+
+          <div class="add-section-row">
+            <button class="btn-outline" @click="addSection">+ Добавить раздел</button>
           </div>
         </div>
       </section>
     </div>
+
+    <TemplateOptionsModal
+      :is-open="isOptionsOpen"
+      :system="selectedSystem"
+      :selected-keys="selectedKeys"
+      title="Что включить в основу системы"
+      continue-label="Далее"
+      cancel-label="Отмена"
+      @close="isOptionsOpen = false"
+      @continue="handleOptionsContinue"
+    />
+
+    <TemplateParamsModal
+      :is-open="isParamsOpen"
+      :system="selectedSystem"
+      :selected-keys="selectedKeys"
+      :initial-values="paramValues"
+      title="Параметры системы по умолчанию"
+      submit-label="Применить"
+      back-label="Назад"
+      @close="isParamsOpen = false"
+      @back="backToOptions"
+      @submit="handleParamsSubmit"
+    />
+
+    <datalist id="works-list-editor">
+      <option v-for="w in worksDb" :key="w.идентификатор" :value="w.наименование_работы"></option>
+    </datalist>
+
+    <datalist id="materials-list-editor">
+      <option v-for="m in materialsDb" :key="m.идентификатор" :value="m.полное_наименование_материала"></option>
+    </datalist>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { getDb } from '../infrastructure/db/client'
+import { useRoute, useRouter } from 'vue-router'
+import { evaluate } from 'mathjs'
+import EstimateTable from '../components/EstimateTable.vue'
+import TemplateOptionsModal from '../components/TemplateOptionsModal.vue'
+import TemplateParamsModal from '../components/TemplateParamsModal.vue'
+import { listSystems } from '../application/systems/listSystems'
+import { getSystemTemplate } from '../application/systems/getSystemTemplate'
+import { getCatalogData } from '../application/catalog/getCatalogData'
+import { buildEstimateFromSystem } from '../utils/templateEstimateBuilder'
+import { toLegacyMaterialRow, toLegacyWorkRow } from '../shared/adapters/catalogViewAdapters'
+import { toSystemListItem, toSystemTemplateView } from '../shared/adapters/systemViewAdapter'
+import { sanitizeTemplateParamValues } from '../shared/templateSystemEnhancements'
+import { assignExcelCellCodesToSections, nextExcelCellCodeForSections } from '../shared/utils/excelCellCodes'
+import { SystemRepository } from '../infrastructure/repositories/SystemRepository'
+
+const systemRepository = new SystemRepository()
+const route = useRoute()
+const router = useRouter()
 
 const loading = ref(false)
-const templates = ref([])
-const selectedTemplateId = ref(null)
+const systems = ref([])
+const selectedSystemCode = ref('')
+const selectedSystem = ref(null)
+const editableZone = ref(null)
+const selectedKeys = ref([])
+const paramValues = ref({})
+const worksDb = ref([])
+const materialsDb = ref([])
+const formulasDb = ref([])
+const coefficientsDb = ref([])
+const isOptionsOpen = ref(false)
+const isParamsOpen = ref(false)
 
-const selectedTemplate = computed(() => {
-  return templates.value.find((item) => item.идентификатор === selectedTemplateId.value) || null
+function uuid() {
+  return crypto.randomUUID()
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
+function toNumber(value, fallback = 0) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function normalize(value) {
+  return `${value || ''}`.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function round2(value) {
+  return Math.round(toNumber(value) * 100) / 100
+}
+
+const selectedOptionLabels = computed(() => {
+  if (!selectedSystem.value) return ''
+  const optionMap = new Map((selectedSystem.value.опции || []).map((item) => [item.key, item.label]))
+  return selectedKeys.value.map((key) => optionMap.get(key) || key).join(', ')
 })
 
-function createTemplateField(payload = {}) {
-  return {
-    key: payload.key || crypto.randomUUID(),
-    label: payload.label || '',
-    type: payload.type || 'number',
-    unit: payload.unit || '',
-    value: payload.value ?? ''
+const defaultParamsSummary = computed(() => {
+  const keys = Object.keys(paramValues.value || {}).filter((key) => {
+    const value = paramValues.value[key]
+    return !(value === '' || value === null || value === undefined)
+  })
+  return keys.length ? `${keys.length} шт.` : 'не заданы'
+})
+
+onMounted(async () => {
+  await loadCatalogs()
+  await loadSystemsList()
+  const initialCode = `${route.query.system || systems.value[0]?.код || ''}`
+  if (initialCode) {
+    await openSystem(initialCode)
   }
+})
+
+async function loadCatalogs() {
+  const data = await getCatalogData()
+  worksDb.value = (data.works || []).map(toLegacyWorkRow)
+  materialsDb.value = (data.materials || []).map(toLegacyMaterialRow)
+  formulasDb.value = data.formulas || []
+  coefficientsDb.value = data.coefficients || []
 }
 
-function createTemplateItem(payload = {}) {
-  return {
-    key: payload.key || crypto.randomUUID(),
-    label: payload.label || 'Новый пункт',
-    checked: payload.checked ?? false,
-    fields: Array.isArray(payload.fields) && payload.fields.length
-      ? payload.fields.map((field) => createTemplateField(field))
-      : [createTemplateField()]
-  }
-}
-
-function createTemplatePayload(payload = {}) {
-  return {
-    version: 2,
-    items: Array.isArray(payload.items)
-      ? payload.items.map((item) => createTemplateItem(item))
-      : []
-  }
-}
-
-function normalizeTemplateData(rawValue) {
-  if (!rawValue) {
-    return createTemplatePayload()
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue)
-
-    if (Array.isArray(parsed)) {
-      return createTemplatePayload({
-        items: parsed.map((item) => createTemplateItem(item))
-      })
-    }
-
-    return createTemplatePayload({
-      ...parsed,
-      items: Array.isArray(parsed.items)
-        ? parsed.items.map((item) => createTemplateItem(item))
-        : []
-    })
-  } catch {
-    return createTemplatePayload()
-  }
-}
-
-async function ensureTemplatesTable() {
-  const db = await getDb()
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS user_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL DEFAULT '',
-      data_json TEXT NOT NULL DEFAULT '{}',
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
-}
-
-async function loadTemplates() {
+async function loadSystemsList() {
   loading.value = true
-
   try {
-    const db = await getDb()
-    const rows = await db.select(`
-      SELECT id, name, data_json
-      FROM user_templates
-      ORDER BY id DESC
-    `)
+    const rows = await listSystems()
+    systems.value = rows.map(toSystemListItem)
+  } finally {
+    loading.value = false
+  }
+}
 
-    templates.value = rows.map((row) => ({
-      идентификатор: row.id,
-      название: row.name || '',
-      data: normalizeTemplateData(row.data_json)
-    }))
+async function openSystem(systemCode) {
+  loading.value = true
+  try {
+    const fullSystem = await getSystemTemplate(systemCode)
+    if (!fullSystem) return
 
-    if (!selectedTemplateId.value && templates.value.length > 0) {
-      selectedTemplateId.value = templates.value[0].идентификатор
+    selectedSystemCode.value = systemCode
+    selectedSystem.value = toSystemTemplateView(fullSystem)
+
+    const override = fullSystem.default_override || null
+    selectedKeys.value = Array.isArray(override?.selectedKeys)
+      ? [...override.selectedKeys]
+      : (selectedSystem.value.опции || []).filter((item) => item.default).map((item) => item.key)
+    paramValues.value = { ...(override?.paramValues || {}) }
+
+    const estimate = await buildEstimateFromSystem(selectedSystem.value, selectedKeys.value, paramValues.value)
+    editableZone.value = estimate.estimateZones?.[0] || createEmptyZone()
+    recalculateZone()
+
+    if (`${route.query.system || ''}` !== systemCode) {
+      router.replace({ query: { ...route.query, system: systemCode } })
     }
   } finally {
     loading.value = false
   }
 }
 
-function selectTemplate(id) {
-  selectedTemplateId.value = id
+function baseLabel(system) {
+  const text = `${system?.тип_основания || ''}`.toLowerCase()
+  if (text.includes('prof') || text.includes('лист')) return 'Профлист'
+  return 'Бетон / ЖБ'
 }
 
-async function createNewTemplate() {
-  const db = await getDb()
-  const name = `Новый шаблон ${templates.value.length + 1}`
-  const payload = createTemplatePayload({
-    items: [
-      createTemplateItem({
-        label: 'Новый пункт',
-        checked: true,
-        fields: [createTemplateField({ label: 'Количество', key: 'quantity', type: 'number', unit: 'шт', value: '' })]
-      })
-    ]
+function hydroLabel(system) {
+  const text = `${system?.тип_гидроизоляции || ''}`.toLowerCase()
+  if (text.includes('pvc') || text.includes('пвх')) return 'ПВХ-мембрана'
+  if (text.includes('brm') || text.includes('брм') || text.includes('бит')) return 'БРМ'
+  return system?.тип_гидроизоляции || 'Не указано'
+}
+
+function createEmptyWork() {
+  return {
+    id: uuid(),
+    code: '',
+    cellCode: '',
+    templateCode: '',
+    itemCode: '',
+    name: '',
+    unit: 'м2',
+    expression: 'S',
+    qty: 0,
+    price: 0,
+    total: 0
+  }
+}
+
+function createEmptyMaterial() {
+  return {
+    id: uuid(),
+    code: '',
+    cellCode: '',
+    templateCode: '',
+    itemCode: '',
+    name: '',
+    supplier: 'ТехноНИКОЛЬ',
+    unit: 'м2',
+    expression: 'S',
+    qty: 0,
+    price: 0,
+    total: 0
+  }
+}
+
+function createEmptySection(title = 'Новый раздел') {
+  return { id: uuid(), title, works: [], materials: [] }
+}
+
+function createEmptyZone() {
+  return {
+    id: uuid(),
+    name: 'Монтаж системы',
+    roofParams: { area: 0, perimeter: 0, parapetDrains: 0, innerDrains: 0, aerators: 0 },
+    customParams: [],
+    templateMeta: { paramValues: {} },
+    sections: [createEmptySection()]
+  }
+}
+
+function findWorkByName(name) {
+  const target = normalize(name)
+  return worksDb.value.find((item) => normalize(item.наименование_работы) === target)
+    || worksDb.value.find((item) => normalize(item.наименование_работы).includes(target) || target.includes(normalize(item.наименование_работы)))
+    || null
+}
+
+function findMaterialByName(name) {
+  const target = normalize(name)
+  return materialsDb.value.find((item) => normalize(item.полное_наименование_материала) === target)
+    || materialsDb.value.find((item) => normalize(item.полное_наименование_материала).includes(target) || target.includes(normalize(item.полное_наименование_материала)))
+    || null
+}
+
+function replaceCoefficients(expression) {
+  return `${expression || ''}`.replace(/\[(.*?)\]/g, (_, coefficientName) => {
+    const target = normalize(coefficientName)
+    const found = coefficientsDb.value.find((item) => {
+      const name = normalize(item.name || item.название)
+      const key = normalize(item.normalize_key || item.код || '')
+      return name === target || key === target
+    })
+    return `${toNumber(found?.value ?? found?.значение ?? 1, 1)}`
+  })
+}
+
+function evaluateExpression(expression, scope) {
+  const prepared = replaceCoefficients(`${expression || '0'}`.replace(/^=/, '').trim())
+  if (!prepared) return 0
+  try {
+    const value = evaluate(prepared, scope)
+    return Math.round(toNumber(value) * 1000) / 1000
+  } catch {
+    return 0
+  }
+}
+
+function getWorkPriceByArea(workRow, area) {
+  const value = toNumber(area, 0)
+  if (value <= 300) return toNumber(workRow?.цена_0_300, 0)
+  if (value <= 600) return toNumber(workRow?.цена_300_600, 0)
+  if (value <= 1000) return toNumber(workRow?.цена_600_1000, 0)
+  if (value <= 3000) return toNumber(workRow?.цена_1000_3000, 0)
+  if (value <= 6000) return toNumber(workRow?.цена_3000_6000, 0)
+  if (value <= 15000) return toNumber(workRow?.цена_6000_15000, 0)
+  if (value <= 30000) return toNumber(workRow?.цена_15000_30000, 0)
+  return toNumber(workRow?.цена_более_30000, 0)
+}
+
+function buildScope(zone) {
+  const scope = {
+    S: toNumber(zone?.roofParams?.area),
+    P: toNumber(zone?.roofParams?.perimeter),
+    OD: toNumber(zone?.roofParams?.parapetDrains),
+    ID: toNumber(zone?.roofParams?.innerDrains),
+    A: toNumber(zone?.roofParams?.aerators),
+    roof_area: toNumber(zone?.roofParams?.area),
+    parapet_perimeter: toNumber(zone?.roofParams?.perimeter),
+    outer_drains_count: toNumber(zone?.roofParams?.parapetDrains),
+    inner_drains_count: toNumber(zone?.roofParams?.innerDrains),
+    aerators_count: toNumber(zone?.roofParams?.aerators)
+  }
+
+  for (const [key, rawValue] of Object.entries(editableZone.value?.templateMeta?.paramValues || {})) {
+    const number = Number(rawValue)
+    if (Number.isFinite(number)) scope[key] = number
+  }
+
+  for (const param of zone?.customParams || []) {
+    const symbol = `${param?.symbol || ''}`.trim()
+    if (symbol) scope[symbol] = toNumber(param?.value, 0)
+  }
+
+  return scope
+}
+
+function recalculateZone() {
+  if (!editableZone.value) return
+  assignExcelCellCodesToSections(editableZone.value.sections || [])
+
+  const scope = buildScope(editableZone.value)
+
+  for (const section of editableZone.value.sections || []) {
+    for (const work of section.works || []) {
+      const found = findWorkByName(work.name)
+      if (found) {
+        work.itemCode = found.идентификатор
+        work.unit = found.единица_измерения_работы || work.unit
+        work.price = Number.isFinite(Number(work.price)) ? Number(work.price) : getWorkPriceByArea(found, editableZone.value?.roofParams?.area)
+      }
+      work.qty = evaluateExpression(work.expression, scope)
+      work.total = round2(work.qty * toNumber(work.price))
+      if (work.code) scope[work.code] = work.qty
+      if (work.templateCode) scope[`${work.templateCode}`.trim().toUpperCase()] = work.qty
+    }
+
+    for (const material of section.materials || []) {
+      const found = findMaterialByName(material.name || material.base_name)
+      if (found) {
+        material.itemCode = found.артикул_товара || found.идентификатор
+        material.unit = found.единица_измерения || material.unit
+        material.price = Number.isFinite(Number(material.price)) ? Number(material.price) : toNumber(found.базовая_цена, 0)
+      }
+      material.qty = evaluateExpression(material.expression, scope)
+      material.total = round2(material.qty * toNumber(material.price))
+      if (material.code) scope[material.code] = material.qty
+      if (material.templateCode) scope[`${material.templateCode}`.trim().toUpperCase()] = material.qty
+    }
+  }
+}
+
+function addSection() {
+  if (!editableZone.value) return
+  editableZone.value.sections.push(createEmptySection(`Раздел ${editableZone.value.sections.length + 1}`))
+  recalculateZone()
+}
+
+function removeSection(index) {
+  editableZone.value.sections.splice(index, 1)
+  if (!editableZone.value.sections.length) editableZone.value.sections.push(createEmptySection())
+  recalculateZone()
+}
+
+function addWork(section) {
+  const item = createEmptyWork()
+  item.code = nextExcelCellCodeForSections(editableZone.value?.sections || [section])
+  item.cellCode = item.code
+  section.works.push(item)
+  recalculateZone()
+}
+
+function addMaterial(section) {
+  const item = createEmptyMaterial()
+  item.code = nextExcelCellCodeForSections(editableZone.value?.sections || [section])
+  item.cellCode = item.code
+  section.materials.push(item)
+  recalculateZone()
+}
+
+function removeWork(section, index) {
+  section.works.splice(index, 1)
+  recalculateZone()
+}
+
+function removeMaterial(section, index) {
+  section.materials.splice(index, 1)
+  recalculateZone()
+}
+
+function onWorkNameChange(payload, section) {
+  const row = section.works[payload] || payload?.item || payload || null
+  if (!row) return
+  const found = findWorkByName(row.name)
+  if (found) {
+    row.itemCode = found.идентификатор
+    row.name = found.наименование_работы
+    row.unit = found.единица_измерения_работы || row.unit
+    row.price = getWorkPriceByArea(found, editableZone.value?.roofParams?.area)
+  }
+  recalculateZone()
+}
+
+function onMaterialNameChange(payload, section) {
+  const row = section.materials[payload] || payload?.item || payload || null
+  if (!row) return
+  const found = findMaterialByName(row.name)
+  if (found) {
+    row.itemCode = found.артикул_товара || found.идентификатор
+    row.name = found.полное_наименование_материала
+    row.unit = found.единица_измерения || row.unit
+    row.price = toNumber(found.базовая_цена, row.price)
+  }
+  recalculateZone()
+}
+
+function getSectionTotal(section) {
+  const works = (section.works || []).reduce((sum, item) => sum + round2(item.qty * item.price), 0)
+  const materials = (section.materials || []).reduce((sum, item) => sum + round2(item.qty * item.price), 0)
+  return round2(works + materials)
+}
+
+function openSettings() {
+  isOptionsOpen.value = true
+}
+
+function handleOptionsContinue(keys) {
+  selectedKeys.value = [...keys]
+  isOptionsOpen.value = false
+  isParamsOpen.value = true
+}
+
+function backToOptions() {
+  isParamsOpen.value = false
+  isOptionsOpen.value = true
+}
+
+async function handleParamsSubmit(values) {
+  paramValues.value = sanitizeTemplateParamValues(selectedSystem.value, selectedKeys.value, values)
+  isParamsOpen.value = false
+  await rebuildFromEtalon()
+}
+
+async function rebuildFromEtalon() {
+  if (!selectedSystem.value) return
+  const estimate = await buildEstimateFromSystem(selectedSystem.value, selectedKeys.value, paramValues.value, { useDefaultOverride: false })
+  editableZone.value = estimate.estimateZones?.[0] || createEmptyZone()
+  editableZone.value.templateMeta = {
+    ...(editableZone.value.templateMeta || {}),
+    paramValues: { ...paramValues.value }
+  }
+  recalculateZone()
+}
+
+async function saveOverride() {
+  if (!selectedSystem.value || !editableZone.value) return
+
+  await systemRepository.saveSystemDefaultOverride({
+    systemCode: selectedSystem.value.код,
+    title: selectedSystem.value.название,
+    payload: {
+      selectedKeys: [...selectedKeys.value],
+      paramValues: { ...paramValues.value },
+      sections: clone(editableZone.value.sections)
+    }
   })
 
-  await db.execute(
-    `INSERT INTO user_templates (name, data_json) VALUES ($1, $2)`,
-    [name, JSON.stringify(payload)]
-  )
-
-  await loadTemplates()
-
-  if (templates.value.length > 0) {
-    selectedTemplateId.value = templates.value[0].идентификатор
-  }
+  window.alert('Основа системы сохранена.')
+  await openSystem(selectedSystem.value.код)
 }
 
-function addItem() {
-  if (!selectedTemplate.value) return
-
-  selectedTemplate.value.data.items.push(
-    createTemplateItem({
-      label: 'Новый пункт',
-      checked: false,
-      fields: [createTemplateField({ label: 'Количество', key: 'quantity', type: 'number', unit: '', value: '' })]
-    })
-  )
+async function resetOverride() {
+  if (!selectedSystem.value) return
+  if (!window.confirm('Сбросить сохранённую основу системы и вернуться к эталону?')) return
+  await systemRepository.deleteSystemDefaultOverride(selectedSystem.value.код)
+  await openSystem(selectedSystem.value.код)
 }
-
-function removeItem(index) {
-  if (!selectedTemplate.value) return
-  selectedTemplate.value.data.items.splice(index, 1)
-}
-
-function moveItemUp(index) {
-  if (!selectedTemplate.value || index === 0) return
-  const list = selectedTemplate.value.data.items
-  const temp = list[index - 1]
-  list[index - 1] = list[index]
-  list[index] = temp
-}
-
-function moveItemDown(index) {
-  if (!selectedTemplate.value) return
-  const list = selectedTemplate.value.data.items
-  if (index >= list.length - 1) return
-  const temp = list[index + 1]
-  list[index + 1] = list[index]
-  list[index] = temp
-}
-
-function addField(item) {
-  item.fields.push(
-    createTemplateField({
-      label: 'Новое поле',
-      key: `field_${item.fields.length + 1}`,
-      type: 'number',
-      unit: '',
-      value: ''
-    })
-  )
-}
-
-function removeField(item, fieldIndex) {
-  item.fields.splice(fieldIndex, 1)
-  if (item.fields.length === 0) {
-    item.fields.push(createTemplateField())
-  }
-}
-
-async function saveTemplate() {
-  if (!selectedTemplate.value) return
-
-  const currentId = selectedTemplate.value.идентификатор
-  const db = await getDb()
-
-  const payload = {
-    version: 2,
-    items: selectedTemplate.value.data.items.map((item) => ({
-      key: item.key || crypto.randomUUID(),
-      label: item.label || '',
-      checked: !!item.checked,
-      fields: item.fields.map((field) => ({
-        key: field.key || crypto.randomUUID(),
-        label: field.label || '',
-        type: field.type || 'number',
-        unit: field.unit || '',
-        value: field.value ?? ''
-      }))
-    }))
-  }
-
-  await db.execute(
-    `UPDATE user_templates SET name = $1, data_json = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
-    [
-      selectedTemplate.value.название || 'Без названия',
-      JSON.stringify(payload),
-      currentId
-    ]
-  )
-
-  await loadTemplates()
-  selectedTemplateId.value = currentId
-}
-
-async function deleteTemplate() {
-  if (!selectedTemplate.value) return
-  if (!window.confirm('Удалить шаблон?')) return
-
-  const currentId = selectedTemplate.value.идентификатор
-  const db = await getDb()
-
-  await db.execute(`DELETE FROM user_templates WHERE id = $1`, [currentId])
-
-  await loadTemplates()
-
-  if (templates.value.length > 0) {
-    selectedTemplateId.value = templates.value[0].идентификатор
-  } else {
-    selectedTemplateId.value = null
-  }
-}
-
-onMounted(async () => {
-  await ensureTemplatesTable()
-  await loadTemplates()
-})
 </script>
 
 <style scoped>
-.templates-page {
-  padding: 20px;
-  box-sizing: border-box;
+.system-editor-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 .page-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 10px;
 }
 
-.header-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.page-subtitle {
+  margin: 0;
+  color: var(--text-soft);
 }
 
 .layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 300px 1fr;
   gap: 20px;
-  min-height: calc(100vh - 140px);
+  min-height: calc(100vh - 180px);
 }
 
 .sidebar {
@@ -456,141 +613,153 @@ onMounted(async () => {
 }
 
 .sidebar-title {
-  font-size: 16px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.system-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.system-list-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border-color);
+  background: var(--surface-soft);
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+}
+
+.system-list-item.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.system-list-name {
   font-weight: 700;
   color: var(--text-main);
 }
 
-.template-list-item {
-  text-align: left;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card-soft);
-  padding: 12px 14px;
-  border-radius: 10px;
-  cursor: pointer;
-}
-
-.template-list-item.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.content {
-  min-width: 0;
-}
-
-.empty-state,
-.empty-editor {
-  padding: 20px;
+.system-list-meta {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-soft);
 }
 
 .editor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   padding: 20px;
 }
 
 .editor-header {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  align-items: end;
-  margin-bottom: 20px;
-}
-
-.editor-header-left {
-  flex: 1;
-}
-
-.editor-header-actions {
-  display: flex;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 18px;
   flex-wrap: wrap;
 }
 
-.items-section {
+.editor-title {
+  margin: 0;
+}
+
+.editor-subtitle,
+.editor-hint {
+  margin-top: 6px;
+  color: var(--text-soft);
+}
+
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.defaults-summary {
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.item-card {
-  padding: 16px;
-}
-
-.item-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.item-actions,
-.field-actions {
-  display: flex;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
-.grid-two {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.zone-params-block {
+  display: flex;
+  flex-direction: column;
   gap: 14px;
 }
 
-.fields-block {
-  margin-top: 16px;
+.zone-params-title {
+  font-weight: 700;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  font-size: 14px;
 }
 
-.fields-header {
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.calc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.section-block {
+  border-top: 1px solid var(--border-color);
+  padding-top: 18px;
+}
+
+.section-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  align-items: center;
+  margin-bottom: 10px;
 }
 
-.fields-title {
+.section-title-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.section-total-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
   font-weight: 700;
 }
 
-.field-row {
-  padding: 14px;
-  margin-bottom: 12px;
+.add-section-row {
+  display: flex;
+  justify-content: center;
 }
 
-.field-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+.empty-state {
+  padding: 24px;
+  color: var(--text-soft);
+  text-align: center;
 }
 
-.mini-btn,
-.small-btn {
-  padding: 8px 12px;
-}
-
-@media (max-width: 1200px) {
+@media (max-width: 1280px) {
   .layout {
     grid-template-columns: 1fr;
   }
 
-  .editor-header,
-  .item-top,
-  .fields-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .grid-two,
-  .field-grid {
-    grid-template-columns: 1fr;
+  .params-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

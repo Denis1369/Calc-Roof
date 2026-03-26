@@ -9,7 +9,7 @@
         <RouterLink class="app-sidebar-link" to="/directories">Справочники</RouterLink>
         <RouterLink class="app-sidebar-link" to="/formulas">formulas</RouterLink>
         <RouterLink class="app-sidebar-link" to="/coefficients">coefficients</RouterLink>
-        <RouterLink class="app-sidebar-link" to="/templates">templates</RouterLink>
+        <RouterLink class="app-sidebar-link" to="/templates">Редактор систем</RouterLink>
       </nav>
 
       <div class="app-sidebar-footer">

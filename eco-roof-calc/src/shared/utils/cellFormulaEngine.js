@@ -1,4 +1,5 @@
 import { evaluate } from 'mathjs'
+import { isExcelCellCode, normalizeExcelCellCode, nextExcelCellCodeForSections } from './excelCellCodes'
 
 function toNumber(value, fallback = 0) {
   const number = Number(value)
@@ -17,12 +18,11 @@ function round3(value) {
 }
 
 export function isCellCode(value) {
-  return /^C\d+$/i.test(`${value || ''}`.trim())
+  return isExcelCellCode(value)
 }
 
 export function normalizeCellCode(value) {
-  const raw = `${value || ''}`.trim().toUpperCase()
-  return isCellCode(raw) ? raw : ''
+  return normalizeExcelCellCode(value)
 }
 
 export function extractItemCode(item) {
@@ -84,7 +84,7 @@ export function replaceCoefficients(expression, coefficientsDb = []) {
 
 function injectMissingCellRefs(prepared, rowContext) {
   const context = { ...(rowContext || {}) }
-  const refs = prepared.match(/\bC\d+\b/gi) || []
+  const refs = prepared.match(/\b[A-Z]+[1-9]\d*\b/gi) || []
 
   for (const ref of refs) {
     const code = ref.toUpperCase()
@@ -190,10 +190,5 @@ export function nextCustomCellCode(zone) {
     }
   }
 
-  let value = 9000
-  while (used.has(`C${value}`)) {
-    value += 1
-  }
-
-  return `C${value}`
+  return nextExcelCellCodeForSections(zone?.sections || [])
 }

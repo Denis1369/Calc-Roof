@@ -33,7 +33,6 @@
         v-for="(system, index) in systems"
         :key="system.идентификатор"
         class="system-card ui-card"
-        @click="openSystem(system)"
       >
         <div class="card-image-placeholder" :style="{ background: getGradient(index) }">
           <img v-if="system.превью" :src="system.превью" class="card-image" alt="" />
@@ -52,7 +51,10 @@
         </div>
 
         <div class="card-footer">
-          <button class="calculate-btn">Выбрать систему ➔</button>
+          <div class="card-footer-actions">
+            <button class="calculate-btn" @click.stop="openSystem(system)">Выбрать систему ➔</button>
+            <button class="edit-system-btn" @click.stop="editSystemBase(system)">Редактировать основу</button>
+          </div>
         </div>
       </div>
     </div>
@@ -230,6 +232,10 @@ async function submitPresetName(title) {
 
 function resolveSystemName(code) {
   return systems.value.find((item) => item.код === code)?.название || code || 'Система'
+}
+
+function editSystemBase(system) {
+  router.push({ path: '/templates', query: { system: system.код || system.code } })
 }
 
 function getGradient(index) {
@@ -420,7 +426,14 @@ function getHydroLabel(value) {
   padding: 0 20px 20px;
 }
 
+.card-footer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .calculate-btn,
+.edit-system-btn,
 .mini-btn {
   cursor: pointer;
 }
@@ -433,5 +446,15 @@ function getHydroLabel(value) {
   font-weight: 700;
   background: var(--accent);
   color: #fff;
+}
+
+.edit-system-btn {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 700;
+  background: var(--surface-soft);
+  color: var(--text-main);
 }
 </style>

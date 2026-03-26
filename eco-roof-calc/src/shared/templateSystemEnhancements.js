@@ -14,6 +14,155 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback
 }
 
+
+const OPTION_ALIASES = {
+  parapets: 'parapets',
+  parapet: 'parapets',
+  inner_drains: 'inner_drains',
+  inner_drain: 'inner_drains',
+  internal_drains: 'inner_drains',
+  outer_drains: 'outer_drains',
+  outer_drain: 'outer_drains',
+  external_drains: 'outer_drains',
+  aerators: 'aerators',
+  aerator: 'aerators',
+  walkways: 'walkways',
+  walkway: 'walkways',
+  cornice: 'cornice',
+  counter_slopes: 'counter_slopes',
+  counterslopes: 'counter_slopes',
+  deformation_joints: 'deformation_joints',
+  deformation_joint: 'deformation_joints',
+  fachwerks: 'fachwerks',
+  fachwerk: 'fachwerks',
+  smoke_hatches: 'smoke_hatches',
+  smoke_hatch: 'smoke_hatches',
+  fire_protection: 'fire_protection',
+  ov_vk: 'ov_vk',
+  pedestals: 'pedestals',
+  pedestal: 'pedestals',
+  air_intakes: 'air_intakes',
+  air_intake: 'air_intakes',
+  fans: 'fans',
+  fan: 'fans',
+  exhausts: 'exhausts',
+  exhaust: 'exhausts',
+  condensers: 'condensers',
+  condenser: 'condensers',
+  cable_goosenecks: 'cable_goosenecks',
+  cable_gooseneck: 'cable_goosenecks',
+  small_penetrations: 'small_penetrations',
+  small_penetration: 'small_penetrations',
+  medium_penetrations: 'medium_penetrations',
+  medium_penetration: 'medium_penetrations',
+  other_penetrations: 'other_penetrations',
+  other_penetration: 'other_penetrations',
+  vent_shafts: 'vent_shafts',
+  vent_shaft: 'vent_shafts',
+  ventilation_shafts: 'vent_shafts',
+  guardrails: 'guardrails',
+  guardrail: 'guardrails',
+  roof_guardrails: 'guardrails',
+  wind_zones: 'wind_zones',
+  wind_zone: 'wind_zones',
+  rib_fill: 'rib_fill',
+  demolition: 'demolition',
+  demolition_works: 'demolition',
+  concrete_nodes: 'concrete_nodes'
+}
+
+const ALWAYS_VISIBLE_BASE_KEYS = new Set([
+  'roof_area',
+  'base_profile',
+  'base_profile_thickness',
+  'lower_insulation_thickness',
+  'upper_insulation_thickness',
+  'membrane_thickness',
+  'membrane_roll_width',
+  'bottom_brm_layers',
+  'screed_area',
+  'primer_area'
+])
+
+const AUTO_CALCULATED_PARAM_PATTERNS = [
+  /tape/,
+  /скотч/,
+  /cleaner/,
+  /очистител/,
+  /подъем/,
+  /механизм/,
+  /утилизац/,
+  /вывоз/,
+  /disposal/,
+  /machin/,
+  /waste/
+]
+
+function canonicalizeOptionKey(value) {
+  const key = normalize(value)
+    .replace(/\s+/g, '_')
+    .replace(/[\/()-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return OPTION_ALIASES[key] || key
+}
+
+function normalizeSelectedKeys(selectedKeys = []) {
+  return [...new Set((Array.isArray(selectedKeys) ? selectedKeys : []).map(canonicalizeOptionKey).filter(Boolean))]
+}
+
+function normalizeOwnerKeys(ownerKeys = []) {
+  return [...new Set((Array.isArray(ownerKeys) ? ownerKeys : []).map(canonicalizeOptionKey).filter(Boolean))]
+}
+
+function getParamIdentity(param = {}) {
+  return `${normalize(param?.key)} ${normalize(param?.label)} ${normalize(param?.description)}`
+}
+
+function hasPattern(value, patterns = []) {
+  return patterns.some((pattern) => pattern.test(value))
+}
+
+function inferOwnerKeys(param = {}) {
+  const identity = getParamIdentity(param)
+  const found = []
+
+  if (/демонтаж|demolition/.test(identity)) found.push('demolition')
+  if (/примыкан|parapet/.test(identity)) found.push('parapets')
+  if (/внутренн.*ворон|inner.*drain/.test(identity)) found.push('inner_drains')
+  if (/внешн.*ворон|outer.*drain/.test(identity)) found.push('outer_drains')
+  if (/аэратор|aerator/.test(identity)) found.push('aerators')
+  if (/дорожк|walkway/.test(identity)) found.push('walkways')
+  if (/карниз|cornice/.test(identity)) found.push('cornice')
+  if (/контруклон|counter.*slope/.test(identity)) found.push('counter_slopes')
+  if (/деформац|deformation/.test(identity)) found.push('deformation_joints')
+  if (/фахверк|fachwerk/.test(identity)) found.push('fachwerks')
+  if (/дымоудален|smoke.*hatch/.test(identity)) found.push('smoke_hatches')
+  if (/противопожар|негорюч|fire.*protection|ng/.test(identity)) found.push('fire_protection')
+  if (/\bов\b|\bвк\b|ov|vk/.test(identity)) found.push('ov_vk')
+  if (/тумб|подставк|pedestal/.test(identity)) found.push('pedestals')
+  if (/воздухозабор|air.*intake/.test(identity)) found.push('air_intakes')
+  if (/вентилятор|fan/.test(identity)) found.push('fans')
+  if (/вытяж|дефлектор|exhaust|deflector/.test(identity)) found.push('exhausts')
+  if (/кондиционер|condenser/.test(identity)) found.push('condensers')
+  if (/гусак|gooseneck/.test(identity)) found.push('cable_goosenecks')
+  if (/малого сечен|small.*penetration/.test(identity)) found.push('small_penetrations')
+  if (/среднего сечен|medium.*penetration/.test(identity)) found.push('medium_penetrations')
+  if (/проч.*проход|pass.*through|penetration/.test(identity)) found.push('other_penetrations')
+  if (/вентшахт|vent.*shaft|ventilation.*shaft/.test(identity)) found.push('vent_shafts')
+  if (/огражден|guardrail|roof.*fenc/.test(identity)) found.push('guardrails')
+  if (/ветров.*зон|wind.*zone/.test(identity)) found.push('wind_zones')
+  if (/гофр|l_профил|l-профил|l profile|rib.*fill/.test(identity)) found.push('rib_fill')
+  if (/ж\/б|жб|бетон|concrete/.test(identity) && /площад|узл/.test(identity)) found.push('concrete_nodes')
+
+  return normalizeOwnerKeys(found)
+}
+
+function shouldHideAutomatically(param = {}) {
+  const identity = getParamIdentity(param)
+  return hasPattern(identity, AUTO_CALCULATED_PARAM_PATTERNS)
+}
+
 function parseOptions(value) {
   if (Array.isArray(value)) return [...value]
   if (typeof value !== 'string' || !value.trim()) return []
@@ -176,19 +325,16 @@ function inferContext(system = {}) {
 function applyBaseParamVisibilityRules(params = []) {
   return params.map((param) => {
     const key = normalize(param?.key)
+    const existingOwners = normalizeOwnerKeys(param?.ownerKeys)
+    const inferredOwners = inferOwnerKeys(param)
+    const ownerKeys = normalizeOwnerKeys([...existingOwners, ...inferredOwners])
+    const hidden = shouldHideAutomatically(param) || (!ownerKeys.length && !ALWAYS_VISIBLE_BASE_KEYS.has(key))
 
-    if (
-      key === 'parapet_perimeter' ||
-      key === 'parapet_length' ||
-      key === 'roof_perimeter'
-    ) {
-      return {
-        ...param,
-        ownerKeys: mergeOwnerKeys(param.ownerKeys, ['parapets'])
-      }
+    return {
+      ...param,
+      ownerKeys: ownerKeys.length ? ownerKeys : undefined,
+      hidden
     }
-
-    return { ...param }
   })
 }
 
@@ -196,6 +342,11 @@ function buildCommonEnhancements() {
   return {
     params: [],
     options: [
+      buildOption('demolition', 'Демонтаж', 5, [
+        buildNumberParam('demolition_waterproofing_area', 'Демонтаж гидроизоляции', 'м2', 'Площадь демонтажа гидроизоляционного слоя', 'additional'),
+        buildNumberParam('demolition_insulation_area', 'Демонтаж теплоизоляции', 'м2', 'Площадь демонтажа теплоизоляционного слоя', 'additional'),
+        buildNumberParam('demolition_base_area', 'Демонтаж профлиста', 'м2', 'Площадь демонтажа профилированного настила', 'additional')
+      ]),
       buildOption('parapets', 'Примыкания к парапету', 40, [
         buildNumberParam('parapet_perimeter_sandwich', 'Примыкания к парапету по сэндвич-панели', 'м/п', 'Отдельная длина примыканий по сэндвич-панели', 'details'),
         buildNumberParam('parapet_perimeter_concrete', 'Примыкания к парапету по ж/б', 'м/п', 'Отдельная длина примыканий по ж/б панели или плите', 'details')
@@ -361,20 +512,28 @@ export function getEnhancedTemplateMeta(system = {}) {
 
 export function getEffectiveTemplateParams(system = {}, selectedKeys = []) {
   const meta = getEnhancedTemplateMeta(system)
-  const selected = new Set(Array.isArray(selectedKeys) ? selectedKeys : [])
+  const selected = new Set(normalizeSelectedKeys(selectedKeys))
 
   const visibleBaseParams = (meta.params || []).filter((param) => {
-    if (!Array.isArray(param.ownerKeys) || !param.ownerKeys.length) {
+    if (param?.hidden) {
+      return false
+    }
+
+    const ownerKeys = normalizeOwnerKeys(param?.ownerKeys)
+    if (!ownerKeys.length) {
       return true
     }
 
-    return param.ownerKeys.some((key) => selected.has(key))
+    return ownerKeys.some((key) => selected.has(key))
   })
 
   const selectedOptionParams = []
   for (const option of meta.options || []) {
-    if (selected.has(option.key) && Array.isArray(option.params)) {
-      selectedOptionParams.push(...option.params)
+    if (selected.has(canonicalizeOptionKey(option.key)) && Array.isArray(option.params)) {
+      selectedOptionParams.push(...option.params.map((param) => ({
+        ...param,
+        ownerKeys: normalizeOwnerKeys(param.ownerKeys || [option.key])
+      })))
     }
   }
 
@@ -393,29 +552,11 @@ export function sanitizeTemplateParamValues(system = {}, selectedKeys = [], valu
   )
 }
 
-export function sanitizeParamValues(system = {}, selectedKeys = [], values = {}) {
-  return sanitizeTemplateParamValues(system, selectedKeys, values)
+
+export function normalizeTemplateOptionKeys(selectedKeys = []) {
+  return normalizeSelectedKeys(selectedKeys)
 }
 
-export function enhanceTemplateSystem(system = {}) {
-  const meta = getEnhancedTemplateMeta(system)
-  return {
-    ...system,
-    context: meta.context,
-    параметры: meta.params,
-    params: meta.params,
-    опции: meta.options,
-    options: meta.options
-  }
-}
-
-
-
-export default {
-  getSystemTitle,
-  getEnhancedTemplateMeta,
-  getEffectiveTemplateParams,
-  sanitizeTemplateParamValues,
-  sanitizeParamValues,
-  enhanceTemplateSystem
+export function normalizeSelectedTemplateOptionKeys(selectedKeys = []) {
+  return normalizeSelectedKeys(selectedKeys)
 }

@@ -113,6 +113,13 @@ export class SystemRepository {
       })
     }
 
+    const overrideRows = await db.select(
+      'SELECT * FROM system_default_overrides WHERE system_code = $1 LIMIT 1',
+      [system.code]
+    )
+
+    const overrideRow = overrideRows[0] || null
+
     return {
       ...system,
       params: params.map((param) => ({
@@ -120,8 +127,64 @@ export class SystemRepository {
         options: tryParseJson(param.options_json, [])
       })),
       features,
-      layers: hydratedLayers
+      layers: hydratedLayers,
+      default_override: overrideRow ? tryParseJson(overrideRow.payload_json, null) : null
     }
+  }
+
+
+  async loadSystemDefaultOverride(systemCode) {
+    const db = await getDb()
+    const rows = await db.select(
+      'SELECT * FROM system_default_overrides WHERE system_code = $1 LIMIT 1',
+      [systemCode]
+    )
+
+    if (!rows.length) return null
+
+    const row = rows[0]
+    return {
+      ...row,
+      payload: tryParseJson(row.payload_json, {})
+    }
+  }
+
+  async listSystemDefaultOverrides() {
+    const db = await getDb()
+    const rows = await db.select('SELECT * FROM system_default_overrides ORDER BY system_code')
+    return rows.map((row) => ({
+      ...row,
+      payload: tryParseJson(row.payload_json, {})
+    }))
+  }
+
+  async saveSystemDefaultOverride({ systemCode, title = '', payload = {} }) {
+    const db = await getDb()
+    const existing = await this.loadSystemDefaultOverride(systemCode)
+
+    if (existing?.id) {
+      await db.execute(
+        `UPDATE system_default_overrides
+         SET title = $1,
+             payload_json = $2,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE system_code = $3`,
+        [title, JSON.stringify(payload), systemCode]
+      )
+    } else {
+      await db.execute(
+        `INSERT INTO system_default_overrides (system_code, title, payload_json)
+         VALUES ($1, $2, $3)`,
+        [systemCode, title, JSON.stringify(payload)]
+      )
+    }
+
+    return this.loadSystemDefaultOverride(systemCode)
+  }
+
+  async deleteSystemDefaultOverride(systemCode) {
+    const db = await getDb()
+    await db.execute('DELETE FROM system_default_overrides WHERE system_code = $1', [systemCode])
   }
 
   async saveSystemConfig({

@@ -4,10 +4,10 @@
       <div class="modal-card page-card">
         <div class="modal-header">
           <div>
-            <h3 class="modal-title">Параметры системы</h3>
-            <div class="modal-subtitle">{{ system?.название }}</div>
+            <h3 class="modal-title">{{ title }}</h3>
+            <div class="modal-subtitle">{{ systemTitle }}</div>
           </div>
-          <button class="close-btn" @click="$emit('close')">✕</button>
+          <button class="close-btn" type="button" @click="$emit('close')">✕</button>
         </div>
 
         <div class="modal-body">
@@ -15,22 +15,15 @@
             <div class="group-title">{{ group.title }}</div>
 
             <div class="params-grid">
-              <div
-                v-for="param in group.items"
-                :key="param.key"
-                class="param-field"
-              >
+              <div v-for="param in group.items" :key="param.key" class="param-field">
                 <label class="ui-label">{{ param.label }}</label>
 
                 <div v-if="param.description" class="field-description">
                   {{ param.description }}
                 </div>
 
-                <template v-if="param.type === 'select'">
-                  <select
-                    v-model="selectModes[param.key]"
-                    class="ui-select"
-                  >
+                <template v-if="isSelectParam(param)">
+                  <select v-model="selectModes[param.key]" class="ui-select">
                     <option
                       v-for="option in normalizedOptions(param)"
                       :key="option"
@@ -54,6 +47,7 @@
                   v-else-if="param.type === 'number'"
                   v-model.number="localValues[param.key]"
                   type="number"
+                  step="0.01"
                   class="ui-input"
                   :placeholder="param.placeholder || param.unit || ''"
                 />
@@ -67,18 +61,15 @@
                 />
 
                 <div v-if="param.unit" class="unit-hint">{{ param.unit }}</div>
-
-                <div v-if="param.example" class="example-hint">
-                  Например: {{ param.example }}
-                </div>
+                <div v-if="param.example" class="example-hint">Например: {{ param.example }}</div>
               </div>
             </div>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="ui-btn ui-btn-secondary" @click="$emit('back')">Назад</button>
-          <button class="ui-btn ui-btn-primary" @click="submit">Создать смету</button>
+          <button class="ui-btn ui-btn-secondary" type="button" @click="$emit('back')">{{ backLabel }}</button>
+          <button class="ui-btn ui-btn-primary" type="button" @click="submit">{{ submitLabel }}</button>
         </div>
       </div>
     </div>
@@ -87,128 +78,162 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { getVisibleTemplateParams, sanitizeTemplateParamValues } from '../shared/utils/templateParamVisibility'
+import {
+  getEffectiveTemplateParams,
+  getSystemTitle,
+  sanitizeTemplateParamValues,
+  normalizeSelectedTemplateOptionKeys
+} from '../shared/templateSystemEnhancements'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
   system: { type: Object, default: null },
   selectedKeys: { type: Array, default: () => [] },
-  initialValues: { type: Object, default: () => ({}) }
+  initialValues: { type: Object, default: () => ({}) },
+  title: { type: String, default: 'Параметры системы' },
+  submitLabel: { type: String, default: 'Создать смету' },
+  backLabel: { type: String, default: 'Назад' }
 })
 
 const emit = defineEmits(['close', 'back', 'submit'])
+
+const GROUP_TITLES = {
+  basic: 'Основные параметры',
+  layers: 'Слои системы',
+  drainage: 'Водоотведение и аэраторы',
+  details: 'Примыкания и узлы',
+  engineering: 'Инженерные узлы и проходки',
+  safety: 'Ограждения и безопасность',
+  additional: 'Дополнительные элементы'
+}
 
 const localValues = ref({})
 const selectModes = ref({})
 const customValues = ref({})
 
-const effectiveParams = computed(() => getVisibleTemplateParams(props.system, props.selectedKeys))
+const systemTitle = computed(() => getSystemTitle(props.system))
+const normalizedSelectedKeys = computed(() => normalizeSelectedTemplateOptionKeys(props.selectedKeys || []))
+const effectiveParams = computed(() => getEffectiveTemplateParams(props.system || {}, normalizedSelectedKeys.value))
 
 const groupedParams = computed(() => {
-  const groups = {
-    basic: {
-      key: 'basic',
-      title: 'Основные параметры',
-      items: []
-    },
-    layers: {
-      key: 'layers',
-      title: 'Слои системы',
-      items: []
-    },
-    additional: {
-      key: 'additional',
-      title: 'Дополнительные элементы',
-      items: []
-    }
-  }
+  const groups = new Map()
 
   for (const param of effectiveParams.value) {
-    const groupKey = param.group && groups[param.group] ? param.group : 'basic'
-    groups[groupKey].items.push(param)
+    const groupKey = param.group || 'basic'
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        key: groupKey,
+        title: GROUP_TITLES[groupKey] || 'Дополнительные параметры',
+        items: []
+      })
+    }
+
+    groups.get(groupKey).items.push(param)
   }
 
-  return Object.values(groups).filter(group => group.items.length > 0)
+  return [...groups.values()].filter((group) => group.items.length > 0)
 })
 
 watch(
-  () => [props.isOpen, props.system, props.selectedKeys, props.initialValues],
+  () => [props.isOpen, props.system, props.selectedKeys, props.initialValues, effectiveParams.value],
   () => {
-    const nextLocalValues = {}
-    const nextSelectModes = {}
-    const nextCustomValues = {}
-
-    for (const param of effectiveParams.value) {
-      const initialValue = props.initialValues?.[param.key]
-      const options = normalizedOptions(param)
-
-      if (param.type === 'select') {
-        if (initialValue !== undefined && initialValue !== null && initialValue !== '') {
-          if (options.includes(initialValue)) {
-            nextSelectModes[param.key] = initialValue
-            nextCustomValues[param.key] = ''
-          } else {
-            nextSelectModes[param.key] = '__custom__'
-            nextCustomValues[param.key] = initialValue
-          }
-        } else if (param.value !== undefined && param.value !== '') {
-          if (options.includes(param.value)) {
-            nextSelectModes[param.key] = param.value
-            nextCustomValues[param.key] = ''
-          } else {
-            nextSelectModes[param.key] = '__custom__'
-            nextCustomValues[param.key] = param.value
-          }
-        } else if (options.length > 0) {
-          nextSelectModes[param.key] = options[0]
-          nextCustomValues[param.key] = ''
-        } else {
-          nextSelectModes[param.key] = '__custom__'
-          nextCustomValues[param.key] = ''
-        }
-      } else if (param.type === 'number') {
-        if (initialValue !== undefined) {
-          nextLocalValues[param.key] = Number(initialValue) || 0
-        } else if (param.value !== undefined && param.value !== '') {
-          nextLocalValues[param.key] = Number(param.value) || 0
-        } else {
-          nextLocalValues[param.key] = 0
-        }
-      } else {
-        if (initialValue !== undefined) {
-          nextLocalValues[param.key] = initialValue
-        } else if (param.value !== undefined) {
-          nextLocalValues[param.key] = param.value
-        } else {
-          nextLocalValues[param.key] = ''
-        }
-      }
-    }
-
-    localValues.value = nextLocalValues
-    selectModes.value = nextSelectModes
-    customValues.value = nextCustomValues
+    syncState({
+      previousTextValues: localValues.value,
+      previousSelectModes: selectModes.value,
+      previousCustomValues: customValues.value,
+      fallbackValues: props.initialValues || {}
+    })
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 )
 
-function normalizedOptions(param) {
-  return Array.isArray(param.options) ? param.options.filter(Boolean) : []
-}
-
-function submit() {
-  const payload = sanitizeTemplateParamValues(props.system, props.selectedKeys, localValues.value)
+function syncState({ previousTextValues = {}, previousSelectModes = {}, previousCustomValues = {}, fallbackValues = {} } = {}) {
+  const nextLocalValues = {}
+  const nextSelectModes = {}
+  const nextCustomValues = {}
 
   for (const param of effectiveParams.value) {
-    if (param.type === 'select') {
-      payload[param.key] =
-        selectModes.value[param.key] === '__custom__'
-          ? customValues.value[param.key] || ''
-          : selectModes.value[param.key]
+    const options = normalizedOptions(param)
+    const hasExplicitFallback = Object.prototype.hasOwnProperty.call(fallbackValues, param.key)
+    const fallbackValue = hasExplicitFallback ? fallbackValues[param.key] : param.value
+
+    if (isSelectParam(param)) {
+      const previousMode = previousSelectModes[param.key]
+      const previousCustom = previousCustomValues[param.key]
+      const previousVisibleValue = previousMode === '__custom__' ? previousCustom : previousMode
+      const rawValue = previousVisibleValue ?? fallbackValue ?? options[0] ?? ''
+      const stringValue = `${rawValue ?? ''}`
+
+      if (options.includes(stringValue)) {
+        nextSelectModes[param.key] = stringValue
+        nextCustomValues[param.key] = ''
+      } else if (stringValue) {
+        nextSelectModes[param.key] = '__custom__'
+        nextCustomValues[param.key] = stringValue
+      } else if (options.length > 0) {
+        nextSelectModes[param.key] = options[0]
+        nextCustomValues[param.key] = ''
+      } else {
+        nextSelectModes[param.key] = '__custom__'
+        nextCustomValues[param.key] = ''
+      }
+
+      continue
+    }
+
+    const previousValue = previousTextValues[param.key]
+    const rawValue = previousValue ?? fallbackValue ?? (param.type === 'number' ? 0 : '')
+
+    if (param.type === 'number') {
+      nextLocalValues[param.key] = Number(rawValue) || 0
+    } else {
+      nextLocalValues[param.key] = `${rawValue ?? ''}`
     }
   }
 
-  emit('submit', payload)
+  localValues.value = nextLocalValues
+  selectModes.value = nextSelectModes
+  customValues.value = nextCustomValues
+}
+
+function isSelectParam(param) {
+  return param?.type === 'select' || normalizedOptions(param).length > 0
+}
+
+function normalizedOptions(param) {
+  if (Array.isArray(param?.options)) {
+    return param.options.map((item) => `${item}`)
+  }
+
+  if (typeof param?.options === 'string' && param.options.trim()) {
+    try {
+      const parsed = JSON.parse(param.options)
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => `${item}`)
+      }
+    } catch {
+      return param.options
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    }
+  }
+
+  return []
+}
+
+function submit() {
+  const payload = { ...localValues.value }
+
+  for (const param of effectiveParams.value) {
+    if (isSelectParam(param)) {
+      payload[param.key] = selectModes.value[param.key] === '__custom__'
+        ? customValues.value[param.key]
+        : selectModes.value[param.key]
+    }
+  }
+
+  emit('submit', sanitizeTemplateParamValues(props.system || {}, normalizedSelectedKeys.value, payload))
 }
 </script>
 

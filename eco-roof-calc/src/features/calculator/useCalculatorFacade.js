@@ -9,6 +9,7 @@ import { listSystems } from '../../application/systems/listSystems'
 import { getSystemTemplate } from '../../application/systems/getSystemTemplate'
 
 import { buildEstimateFromSystem } from '../../utils/templateEstimateBuilder'
+import { assignExcelCellCodesToSections, nextExcelCellCodeForSections } from '../../shared/utils/excelCellCodes'
 import {
   toLegacyMaterialRow,
   toLegacyWorkRow
@@ -50,6 +51,9 @@ function createEmptyWork() {
   return {
     id: uuid(),
     code: '',
+    cellCode: '',
+    templateCode: '',
+    itemCode: '',
     name: '',
     unit: 'м2',
     formulaName: '',
@@ -64,6 +68,9 @@ function createEmptyMaterial(supplier = 'ТехноНИКОЛЬ') {
   return {
     id: uuid(),
     code: '',
+    cellCode: '',
+    templateCode: '',
+    itemCode: '',
     name: '',
     supplier,
     unit: 'м2',
@@ -134,6 +141,7 @@ function normalizeWorkItem(item) {
     id: item?.id || uuid(),
     code: item?.code || '',
     cellCode: item?.cellCode || '',
+    templateCode: item?.templateCode || '',
     itemCode: item?.itemCode || '',
     name: item?.name || '',
     unit: item?.unit || 'м2',
@@ -150,6 +158,7 @@ function normalizeMaterialItem(item, supplier = 'ТехноНИКОЛЬ') {
     id: item?.id || uuid(),
     code: item?.code || '',
     cellCode: item?.cellCode || '',
+    templateCode: item?.templateCode || '',
     itemCode: item?.itemCode || '',
     name: item?.name || '',
     supplier: item?.supplier || supplier,
@@ -176,7 +185,7 @@ function normalizeSection(section, zoneSupplier = 'ТехноНИКОЛЬ') {
 function normalizeZone(zone) {
   const supplierType = zone?.supplierType || 'ТехноНИКОЛЬ'
 
-  return {
+  const normalized = {
     id: zone?.id || uuid(),
     name: zone?.name || 'Участок',
     supplierType,
@@ -195,6 +204,9 @@ function normalizeZone(zone) {
       ? zone.sections.map((section) => normalizeSection(section, supplierType))
       : [createEmptySection()]
   }
+
+  assignExcelCellCodesToSections(normalized.sections)
+  return normalized
 }
 
 function normalizeEstimatePayload(payload) {
@@ -501,7 +513,7 @@ export function useCalculatorFacade() {
     row.name = name
 
     if (found) {
-      row.code = found.идентификатор
+      row.itemCode = found.идентификатор
       row.name = found.наименование_работы
       row.unit = found.единица_измерения_работы || row.unit
       row.price = getWorkPriceByArea(found, zone?.roofParams?.area)
@@ -520,7 +532,7 @@ export function useCalculatorFacade() {
     row.name = name
 
     if (found) {
-      row.code = found.артикул_товара || found.идентификатор
+      row.itemCode = found.артикул_товара || found.идентификатор
       row.name = found.полное_наименование_материала
       row.unit = found.единица_измерения || row.unit
       row.price = toNumber(found.базовая_цена, row.price)
@@ -567,6 +579,7 @@ export function useCalculatorFacade() {
 
   function recalculateVolumes() {
     for (const zone of estimateZones.value) {
+      assignExcelCellCodesToSections(zone.sections || [])
       applySupplierToZone(zone)
       const scope = buildScope(zone)
 
@@ -586,9 +599,13 @@ export function useCalculatorFacade() {
 
           work.total = round2(work.qty * toNumber(work.price, 0))
 
-          const stableCode = `${work.cellCode || work.code || ''}`.trim()
+          const stableCode = `${work.code || work.cellCode || ''}`.trim()
           if (stableCode) {
             scope[stableCode] = toNumber(work.qty, 0)
+          }
+
+          if (work.templateCode) {
+            scope[`${work.templateCode}`.trim().toUpperCase()] = toNumber(work.qty, 0)
           }
         }
 
@@ -607,9 +624,13 @@ export function useCalculatorFacade() {
 
           material.total = round2(material.qty * toNumber(material.price, 0))
 
-          const stableCode = `${material.cellCode || material.code || ''}`.trim()
+          const stableCode = `${material.code || material.cellCode || ''}`.trim()
           if (stableCode) {
             scope[stableCode] = toNumber(material.qty, 0)
+          }
+
+          if (material.templateCode) {
+            scope[`${material.templateCode}`.trim().toUpperCase()] = toNumber(material.qty, 0)
           }
         }
       }
@@ -697,12 +718,18 @@ export function useCalculatorFacade() {
     recalculateVolumes()
   }
 
-  function addWork(section) {
-    section.works.push(createEmptyWork())
+  function addWork(section, zone = null) {
+    const item = createEmptyWork()
+    item.code = nextExcelCellCodeForSections(zone?.sections || [section])
+    item.cellCode = item.code
+    section.works.push(item)
   }
 
   function addMaterial(section, zone) {
-    section.materials.push(createEmptyMaterial(zone?.supplierType || 'ТехноНИКОЛЬ'))
+    const item = createEmptyMaterial(zone?.supplierType || 'ТехноНИКОЛЬ')
+    item.code = nextExcelCellCodeForSections(zone?.sections || [section])
+    item.cellCode = item.code
+    section.materials.push(item)
   }
 
   function addExpense() {

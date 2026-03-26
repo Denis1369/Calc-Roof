@@ -145,22 +145,15 @@ const props = defineProps({
 const emit = defineEmits(['changeName', 'changeFormula', 'recalculate', 'remove', 'add'])
 
 function buildCodeTitle(item) {
-  const cellCode = `${item?.code || ''}`.trim()
+  const cellCode = `${item?.code || item?.cellCode || ''}`.trim()
+  const templateCode = `${item?.templateCode || ''}`.trim()
   const itemCode = `${item?.itemCode || item?.productCode || ''}`.trim()
 
-  if (cellCode && itemCode) {
-    return `Код ячейки: ${cellCode}\nКод товара: ${itemCode}`
-  }
-
-  if (cellCode) {
-    return `Код ячейки: ${cellCode}`
-  }
-
-  if (itemCode) {
-    return `Код товара: ${itemCode}`
-  }
-
-  return 'Код ячейки не задан'
+  const lines = []
+  if (cellCode) lines.push(`Код ячейки: ${cellCode}`)
+  if (templateCode && templateCode !== cellCode) lines.push(`Шаблонный код: ${templateCode}`)
+  if (itemCode) lines.push(`Код товара: ${itemCode}`)
+  return lines.join('\n') || 'Код ячейки не задан'
 }
 
 

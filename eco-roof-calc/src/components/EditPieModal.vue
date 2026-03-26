@@ -5,21 +5,21 @@
         <div class="modal-header">
           <div>
             <h3 class="modal-title">Редактировать пирог</h3>
-            <div class="modal-subtitle">{{ system?.название }}</div>
+            <div class="modal-subtitle">{{ systemTitle }}</div>
           </div>
           <button class="close-btn" type="button" @click="$emit('close')">✕</button>
         </div>
 
         <div class="modal-body">
           <div class="params-group ui-card-soft">
-            <div class="group-title">Опции</div>
+            <div class="group-title">Что включить в смету</div>
 
-            <div v-if="!system?.опции?.length" class="empty-block">
+            <div v-if="!mergedOptions.length" class="empty-block">
               У этой системы нет дополнительных опций.
             </div>
 
             <label
-              v-for="option in system?.опции || []"
+              v-for="option in mergedOptions"
               :key="option.key"
               class="option-row"
             >
@@ -41,10 +41,19 @@
                 <label class="ui-label">{{ param.label }}</label>
                 <div class="field-description" v-if="param.description">{{ param.description }}</div>
 
-                <template v-if="param.type === 'select' || (Array.isArray(param.options) && param.options.length)">
-                  <select v-model="localParamValues[param.key]" class="ui-select">
-                    <option v-for="option in param.options" :key="option" :value="option">{{ option }}</option>
+                <template v-if="isSelectParam(param)">
+                  <select v-model="selectModes[param.key]" class="ui-select">
+                    <option v-for="option in normalizedOptions(param)" :key="option" :value="option">{{ option }}</option>
+                    <option value="__custom__">Свой вариант</option>
                   </select>
+
+                  <input
+                    v-if="selectModes[param.key] === '__custom__'"
+                    v-model="customValues[param.key]"
+                    type="text"
+                    class="ui-input"
+                    :placeholder="param.customPlaceholder || 'Введите свой вариант'"
+                  />
                 </template>
 
                 <template v-else-if="param.type === 'number'">
@@ -72,7 +81,13 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { getVisibleTemplateParams, sanitizeTemplateParamValues } from '../shared/utils/templateParamVisibility'
+import {
+  getEffectiveTemplateParams,
+  getEnhancedTemplateMeta,
+  getSystemTitle,
+  sanitizeTemplateParamValues,
+  normalizeSelectedTemplateOptionKeys
+} from '../shared/templateSystemEnhancements'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -91,28 +106,141 @@ const emit = defineEmits(['close', 'submit'])
 
 const localSelectedKeys = ref([])
 const localParamValues = ref({})
+const selectModes = ref({})
+const customValues = ref({})
+
+const systemTitle = computed(() => getSystemTitle(props.system || {}))
+const mergedOptions = computed(() => getEnhancedTemplateMeta(props.system || {}).options || [])
+const normalizedSelectedKeys = computed(() => normalizeSelectedTemplateOptionKeys(localSelectedKeys.value || []))
+const visibleParams = computed(() => getEffectiveTemplateParams(props.system || {}, normalizedSelectedKeys.value))
 
 watch(
   () => [props.isOpen, props.system, props.initialSelectedKeys, props.initialParamValues],
   () => {
-    localSelectedKeys.value = Array.isArray(props.initialSelectedKeys) ? [...props.initialSelectedKeys] : []
-    localParamValues.value = { ...(props.initialParamValues || {}) }
+    localSelectedKeys.value = normalizeSelectedTemplateOptionKeys(Array.isArray(props.initialSelectedKeys) ? [...props.initialSelectedKeys] : [])
 
-    for (const param of props.system?.параметры || []) {
-      if (localParamValues.value[param.key] === undefined) {
-        localParamValues.value[param.key] = param.value
-      }
+    if (!localSelectedKeys.value.length) {
+      localSelectedKeys.value = normalizeSelectedTemplateOptionKeys(mergedOptions.value
+        .filter((option) => option.default)
+        .map((option) => option.key))
     }
+
+    localParamValues.value = {}
+    selectModes.value = {}
+    customValues.value = {}
+
+    syncVisibleState({
+      previousTextValues: {},
+      previousSelectModes: {},
+      previousCustomValues: {},
+      fallbackValues: props.initialParamValues || {}
+    })
   },
   { immediate: true, deep: true }
 )
 
-const visibleParams = computed(() => getVisibleTemplateParams(props.system, localSelectedKeys.value))
+watch(
+  visibleParams,
+  () => {
+    syncVisibleState({
+      previousTextValues: localParamValues.value,
+      previousSelectModes: selectModes.value,
+      previousCustomValues: customValues.value,
+      fallbackValues: props.initialParamValues || {}
+    })
+  },
+  { deep: true }
+)
+
+function syncVisibleState({ previousTextValues = {}, previousSelectModes = {}, previousCustomValues = {}, fallbackValues = {} } = {}) {
+  const nextLocalValues = {}
+  const nextSelectModes = {}
+  const nextCustomValues = {}
+
+  for (const param of visibleParams.value) {
+    const options = normalizedOptions(param)
+    const hasExplicitFallback = Object.prototype.hasOwnProperty.call(fallbackValues, param.key)
+    const fallbackValue = hasExplicitFallback ? fallbackValues[param.key] : param.value
+
+    if (isSelectParam(param)) {
+      const previousMode = previousSelectModes[param.key]
+      const previousCustom = previousCustomValues[param.key]
+      const previousVisibleValue = previousMode === '__custom__' ? previousCustom : previousMode
+      const rawValue = previousVisibleValue ?? fallbackValue ?? options[0] ?? ''
+      const stringValue = `${rawValue ?? ''}`
+
+      if (options.includes(stringValue)) {
+        nextSelectModes[param.key] = stringValue
+        nextCustomValues[param.key] = ''
+      } else if (stringValue) {
+        nextSelectModes[param.key] = '__custom__'
+        nextCustomValues[param.key] = stringValue
+      } else if (options.length > 0) {
+        nextSelectModes[param.key] = options[0]
+        nextCustomValues[param.key] = ''
+      } else {
+        nextSelectModes[param.key] = '__custom__'
+        nextCustomValues[param.key] = ''
+      }
+
+      continue
+    }
+
+    const previousValue = previousTextValues[param.key]
+    const rawValue = previousValue ?? fallbackValue ?? (param.type === 'number' ? 0 : '')
+
+    if (param.type === 'number') {
+      nextLocalValues[param.key] = Number(rawValue) || 0
+    } else {
+      nextLocalValues[param.key] = `${rawValue ?? ''}`
+    }
+  }
+
+  localParamValues.value = nextLocalValues
+  selectModes.value = nextSelectModes
+  customValues.value = nextCustomValues
+}
+
+function isSelectParam(param) {
+  return param?.type === 'select' || normalizedOptions(param).length > 0
+}
+
+function normalizedOptions(param) {
+  if (Array.isArray(param?.options)) {
+    return param.options.map((item) => `${item}`)
+  }
+
+  if (typeof param?.options === 'string' && param.options.trim()) {
+    try {
+      const parsed = JSON.parse(param.options)
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => `${item}`)
+      }
+    } catch {
+      return param.options
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    }
+  }
+
+  return []
+}
 
 function submit() {
+  const payload = { ...localParamValues.value }
+
+  for (const param of visibleParams.value) {
+    if (isSelectParam(param)) {
+      payload[param.key] = selectModes.value[param.key] === '__custom__'
+        ? customValues.value[param.key]
+        : selectModes.value[param.key]
+    }
+  }
+
   emit('submit', {
-    selectedKeys: [...localSelectedKeys.value],
-    paramValues: sanitizeTemplateParamValues(props.system, localSelectedKeys.value, localParamValues.value)
+    selectedKeys: normalizedSelectedKeys.value,
+    paramValues: sanitizeTemplateParamValues(props.system || {}, normalizedSelectedKeys.value, payload)
   })
 }
 </script>

@@ -57,6 +57,15 @@
             </button>
 
             <button
+              v-if="zone.templateMeta?.systemCode"
+              @click="openSystemEditor(zone.templateMeta?.systemCode)"
+              class="ui-btn ui-btn-secondary zone-edit-btn"
+              type="button"
+            >
+              ⚙️ Редактор системы
+            </button>
+
+            <button
               @click="removeZone(zIdx)"
               class="btn-icon danger-text"
               title="Удалить участок"
@@ -147,8 +156,8 @@
             @changeName="onWorkNameChange($event, section, zone)"
             @changeFormula="applyFormula"
             @recalculate="recalculateVolumes"
-            @remove="section.works.splice($event, 1)"
-            @add="addWork(section)"
+            @remove="removeWorkRow(section, $event)"
+            @add="addWork(section, zone)"
           />
 
           <EstimateTable
@@ -159,7 +168,7 @@
             @changeName="onMaterialNameChange($event, section)"
             @changeFormula="applyFormula"
             @recalculate="recalculateVolumes"
-            @remove="section.materials.splice($event, 1)"
+            @remove="removeMaterialRow(section, $event)"
             @add="addMaterial(section, zone)"
           />
 
@@ -323,6 +332,7 @@
 
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useCalculator } from '../composables/useCalculator.js'
 import EstimateTable from '../components/EstimateTable.vue'
 import TemplateOptionsModal from '../components/TemplateOptionsModal.vue'
@@ -330,6 +340,8 @@ import TemplateParamsModal from '../components/TemplateParamsModal.vue'
 import { applyPendingGeneratedEstimate, buildEstimateFromSystem } from '../utils/templateEstimateBuilder'
 import { getSystemTemplate } from '../application/systems/getSystemTemplate'
 import { toSystemTemplateView } from '../shared/adapters/systemViewAdapter'
+
+const router = useRouter()
 
 const {
   projectName,
@@ -390,6 +402,21 @@ async function openEditPieModal(zone, zoneIndex) {
   editPieSelectedKeys.value = Array.isArray(meta.selectedKeys) ? [...meta.selectedKeys] : []
   editPieParamValues.value = { ...(meta.paramValues || {}) }
   isEditOptionsOpen.value = true
+}
+
+function openSystemEditor(systemCode) {
+  if (!systemCode) return
+  router.push({ path: '/templates', query: { system: systemCode } })
+}
+
+function removeWorkRow(section, index) {
+  section.works.splice(index, 1)
+  recalculateVolumes()
+}
+
+function removeMaterialRow(section, index) {
+  section.materials.splice(index, 1)
+  recalculateVolumes()
 }
 
 function closeEditFlow() {
