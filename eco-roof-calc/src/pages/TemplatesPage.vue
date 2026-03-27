@@ -183,6 +183,9 @@ import TemplateParamsModal from '../components/TemplateParamsModal.vue'
 // Импортируем новый компонент
 import AdditionalOptionsEditorModal from '../components/AdditionalOptionsEditorModal.vue'
 
+import { AppMetaRepository } from '../core/repositories/AppMetaRepository'
+import { loadCustomOptionBlocks } from '../modules/templates/optionBlocks'
+
 import { listSystems } from '@/core/services/dataApi'
 import { getSystemTemplate } from '@/core/services/dataApi'
 import { getCatalogData } from '@/core/services/dataApi'
@@ -194,6 +197,9 @@ import { assignExcelCellCodesToSections, nextExcelCellCodeForSections } from '@/
 import { SystemRepository } from '@/core/repositories/SystemRepository'
 
 const systemRepository = new SystemRepository()
+const appMetaRepository = new AppMetaRepository()
+const isDataReady = ref(false)
+
 const route = useRoute()
 const router = useRouter()
 
@@ -250,11 +256,24 @@ const defaultParamsSummary = computed(() => {
 })
 
 onMounted(async () => {
-  await loadCatalogs()
-  await loadSystemsList()
-  const initialCode = `${route.query.system || systems.value[0]?.код || ''}`
-  if (initialCode) {
-    await openSystem(initialCode)
+  try {
+    // 1. Ждем загрузку настроек из БД
+    await loadCustomOptionBlocks(appMetaRepository) 
+    
+    // 2. Грузим каталоги и системы
+    await Promise.all([
+      loadCatalogs(),
+      loadSystemsList()
+    ])
+    
+    const initialCode = `${route.query.system || systems.value[0]?.код || ''}`
+    if (initialCode) {
+      await openSystem(initialCode)
+    }
+    
+    isDataReady.value = true // Всё готово
+  } catch (e) {
+    console.error("Ошибка инициализации:", e)
   }
 })
 
