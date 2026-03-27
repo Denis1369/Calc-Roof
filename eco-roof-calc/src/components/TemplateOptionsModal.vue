@@ -47,7 +47,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { getEnhancedTemplateMeta, getSystemTitle, normalizeSelectedTemplateOptionKeys } from '../shared/templateSystemEnhancements'
+import { getEnhancedTemplateMeta, getSystemTitle, normalizeSelectedTemplateOptionKeys } from '@/modules/templates/templateEnhancements'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },

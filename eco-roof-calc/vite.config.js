@@ -1,31 +1,41 @@
-import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import { fileURLToPath, URL } from 'node:url'
 
-const host = process.env.TAURI_DEV_HOST;
+const host = process.env.TAURI_DEV_HOST
 
-
-export default defineConfig(async () => ({
+export default defineConfig(() => ({
   plugins: [vue()],
-
-  
-  
-  
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url))
+    }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['vue', 'vue-router'],
+          math: ['mathjs'],
+          tauri: ['@tauri-apps/plugin-sql', '@tauri-apps/api']
+        }
+      }
+    }
+  },
   clearScreen: false,
-  
   server: {
     port: 1420,
     strictPort: true,
     host: host || false,
     hmr: host
       ? {
-          protocol: "ws",
+          protocol: 'ws',
           host,
-          port: 1421,
+          port: 1421
         }
       : undefined,
     watch: {
-      
-      ignored: ["**/src-tauri/**"],
-    },
-  },
-}));
+      ignored: ['**/src-tauri/**']
+    }
+  }
+}))

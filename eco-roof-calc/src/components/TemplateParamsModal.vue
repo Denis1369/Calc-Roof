@@ -83,7 +83,7 @@ import {
   getSystemTitle,
   sanitizeTemplateParamValues,
   normalizeSelectedTemplateOptionKeys
-} from '../shared/templateSystemEnhancements'
+} from '@/modules/templates/templateEnhancements'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },

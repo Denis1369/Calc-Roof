@@ -1,1 +1,0 @@
-export { useCalculatorFacade as useCalculator } from '../features/calculator/useCalculatorFacade'

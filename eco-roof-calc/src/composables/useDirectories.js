@@ -1,1 +1,0 @@
-export { useDirectoriesFacade as useDirectories } from '../features/directories/useDirectoriesFacade'

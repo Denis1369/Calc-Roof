@@ -133,7 +133,7 @@
 
 <script setup>
 import { computed, onMounted, watch } from 'vue'
-import { getCatalogData } from '../application/catalog/getCatalogData'
+import { getCatalogData } from '@/core/services/dataApi'
 
 const props = defineProps({
   title: String,
