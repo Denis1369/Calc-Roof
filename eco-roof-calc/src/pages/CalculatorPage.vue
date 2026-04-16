@@ -25,6 +25,8 @@
         <div class="action-buttons">
           <button @click="saveProject" class="ui-btn ui-btn-success">💾 Сохранить</button>
           <button @click="loadProject" class="ui-btn ui-btn-primary">📂 Загрузить</button>
+          <button @click="createReport" class="ui-btn ui-btn-primary">📄 Создать отчет</button>
+          <button @click="exportXlsx" class="ui-btn ui-btn-primary">📊 XLSX</button>
           <button @click="printEstimate" class="ui-btn ui-btn-secondary">🖨️ Печать</button>
         </div>
       </div>
@@ -343,6 +345,25 @@ import { toSystemTemplateView } from '@/core/adapters/viewAdapters'
 
 const router = useRouter()
 
+function createReport() {
+  const html = generateSmartPirReport()
+  if (!html) {
+    window.alert('Не удалось сформировать отчёт.')
+    return
+  }
+
+  router.push('/report/smartpir')
+}
+
+async function exportXlsx() {
+  try {
+    await generateSmartPirReportXlsx()
+  } catch (error) {
+    console.error(error)
+    window.alert('Не удалось экспортировать XLSX-отчёт.')
+  }
+}
+
 const {
   projectName,
   vatRate,
@@ -380,6 +401,8 @@ const {
   subTotalWithoutVat,
   vatAmount,
   finalGrandTotalWithVat,
+  createReport: generateSmartPirReport,
+  exportReportXlsx: generateSmartPirReportXlsx,
   printEstimate
 } = useCalculator()
 

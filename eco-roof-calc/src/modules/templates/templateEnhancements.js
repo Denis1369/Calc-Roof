@@ -565,5 +565,3 @@ export function normalizeSelectedTemplateOptionKeys(selectedKeys = []) {
 export function sanitizeParamValues(system = {}, selectedKeys = [], values = {}) {
   return sanitizeTemplateParamValues(system, selectedKeys, values)
 }
-
-

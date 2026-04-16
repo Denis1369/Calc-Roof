@@ -1,3 +1,4 @@
+import { normalizeKey, normalizeText } from '@/core/utils/normalizeKey'
 import { getDb } from '../db/client'
 
 function tryParseJson(value, fallback) {
@@ -6,6 +7,11 @@ function tryParseJson(value, fallback) {
   } catch {
     return fallback
   }
+}
+
+function buildCustomSystemCode(name) {
+  const base = normalizeKey(name).replace(/_+/g, '_').replace(/^_+|_+$/g, '') || 'custom_system'
+  return `custom_${base}`
 }
 
 export class SystemRepository {
@@ -185,6 +191,209 @@ export class SystemRepository {
   async deleteSystemDefaultOverride(systemCode) {
     const db = await getDb()
     await db.execute('DELETE FROM system_default_overrides WHERE system_code = $1', [systemCode])
+  }
+
+  async getNextAvailableSystemCode(desiredName) {
+    const db = await getDb()
+    const baseCode = buildCustomSystemCode(desiredName)
+    let candidate = baseCode
+    let index = 2
+
+    while (true) {
+      const rows = await db.select('SELECT id FROM systems WHERE code = $1 LIMIT 1', [candidate])
+      if (!rows.length) {
+        return candidate
+      }
+      candidate = `${baseCode}_${index}`
+      index += 1
+    }
+  }
+
+  async createCustomSystemFromExisting({
+    sourceSystemCode,
+    newName,
+    overridePayload = null
+  }) {
+    const db = await getDb()
+    const source = await this.getFullSystemByCode(sourceSystemCode)
+
+    if (!source) {
+      throw new Error('Source system not found')
+    }
+
+    const name = normalizeText(newName || `${source.name || source.code} (копия)`)
+    if (!name) {
+      throw new Error('System name is required')
+    }
+
+    const newCode = await this.getNextAvailableSystemCode(name)
+    const maxSortRows = await db.select('SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM systems')
+    const nextSortOrder = Number(maxSortRows[0]?.max_sort || 0) + 10
+
+    await db.execute(
+      `INSERT INTO systems (
+        code,
+        name,
+        roof_base,
+        waterproofing_type,
+        insulation_family,
+        sort_order,
+        source_url,
+        notes,
+        is_active
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [
+        newCode,
+        name,
+        source.roof_base || '',
+        source.waterproofing_type || '',
+        source.insulation_family || '',
+        nextSortOrder,
+        source.source_url || '',
+        normalizeText(`Пользовательская система. Источник: ${source.name || source.code}`),
+        1
+      ]
+    )
+
+    const createdRows = await db.select('SELECT * FROM systems WHERE code = $1 LIMIT 1', [newCode])
+    const createdSystem = createdRows[0]
+
+    if (!createdSystem?.id) {
+      throw new Error('Failed to create custom system')
+    }
+
+    for (const param of source.params || []) {
+      await db.execute(
+        `INSERT INTO system_params (
+          system_id,
+          code,
+          name,
+          param_type,
+          unit,
+          default_value,
+          options_json,
+          description,
+          sort_order
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          createdSystem.id,
+          param.code,
+          param.name,
+          param.param_type || 'text',
+          param.unit || '',
+          param.default_value ?? '',
+          JSON.stringify(param.options || []),
+          param.description || '',
+          Number(param.sort_order || 0)
+        ]
+      )
+    }
+
+    for (const feature of source.features || []) {
+      await db.execute(
+        `INSERT INTO system_features (
+          system_id,
+          code,
+          name,
+          is_default,
+          sort_order
+        ) VALUES ($1,$2,$3,$4,$5)`,
+        [
+          createdSystem.id,
+          feature.code,
+          feature.name,
+          Number(feature.is_default || 0),
+          Number(feature.sort_order || 0)
+        ]
+      )
+    }
+
+    const layerIdMap = new Map()
+
+    for (const layer of source.layers || []) {
+      await db.execute(
+        `INSERT INTO system_layers (
+          system_id,
+          code,
+          name,
+          layer_kind,
+          is_optional,
+          feature_code,
+          sort_order
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [
+          createdSystem.id,
+          layer.code,
+          layer.name,
+          layer.layer_kind || '',
+          Number(layer.is_optional || 0),
+          layer.feature_code || null,
+          Number(layer.sort_order || 0)
+        ]
+      )
+
+      const createdLayerRows = await db.select(
+        'SELECT id FROM system_layers WHERE system_id = $1 AND code = $2 LIMIT 1',
+        [createdSystem.id, layer.code]
+      )
+      const createdLayerId = createdLayerRows[0]?.id
+      if (!createdLayerId) {
+        continue
+      }
+      layerIdMap.set(layer.id, createdLayerId)
+
+      for (const option of layer.material_options || []) {
+        await db.execute(
+          `INSERT INTO system_layer_material_options (
+            layer_id,
+            material_id,
+            role,
+            is_default,
+            sort_order,
+            notes
+          ) VALUES ($1,$2,$3,$4,$5,$6)`,
+          [
+            createdLayerId,
+            option.material_id,
+            option.role || 'default',
+            Number(option.is_default || 0),
+            Number(option.sort_order || 0),
+            option.notes || ''
+          ]
+        )
+      }
+
+      for (const link of layer.work_links || []) {
+        await db.execute(
+          `INSERT INTO system_layer_work_links (
+            layer_id,
+            work_id,
+            formula_code,
+            default_expression,
+            sort_order,
+            notes
+          ) VALUES ($1,$2,$3,$4,$5,$6)`,
+          [
+            createdLayerId,
+            link.work_id,
+            link.formula_code || null,
+            link.default_expression || '',
+            Number(link.sort_order || 0),
+            link.notes || ''
+          ]
+        )
+      }
+    }
+
+    if (overridePayload) {
+      await this.saveSystemDefaultOverride({
+        systemCode: newCode,
+        title: name,
+        payload: overridePayload
+      })
+    }
+
+    return this.getFullSystemByCode(newCode)
   }
 
   async saveSystemConfig({

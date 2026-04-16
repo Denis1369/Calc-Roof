@@ -18,6 +18,8 @@ import {
   toSystemListItem,
   toSystemTemplateView
 } from '@/core/adapters/viewAdapters'
+import { createSmartPirReportSession } from '@/core/report/smartPirReport'
+import { exportSmartPirReportXlsx } from '@/core/report/smartPirReportXlsx'
 
 function uuid() {
   return crypto.randomUUID()
@@ -847,6 +849,26 @@ export function useCalculator() {
     return round2(subTotalWithoutVat.value + vatAmount.value)
   })
 
+  function getCurrentReportPayload() {
+    recalculateVolumes()
+
+    return {
+      projectName: projectName.value,
+      vatRate: vatRate.value,
+      estimateZones: clone(estimateZones.value),
+      overheadExpenses: clone(overheadExpenses.value),
+      coefficients: clone(coefficientsDbInternal.value)
+    }
+  }
+
+  function createReport() {
+    return createSmartPirReportSession(getCurrentReportPayload())
+  }
+
+  async function exportReportXlsx() {
+    return exportSmartPirReportXlsx(getCurrentReportPayload())
+  }
+
   function printEstimate() {
     window.print()
   }
@@ -899,6 +921,8 @@ export function useCalculator() {
     vatAmount,
     finalGrandTotalWithVat,
 
+    createReport,
+    exportReportXlsx,
     printEstimate
   }
 }

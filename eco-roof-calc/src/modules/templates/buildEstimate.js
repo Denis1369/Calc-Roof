@@ -53,7 +53,7 @@ export function applyPendingGeneratedEstimate({ projectName, vatRate, estimateZo
   }
 }
 
-export async function buildEstimateFromSystem(system, selectedKeys = [], paramValues = {}) {
+export async function buildEstimateFromSystem(system, selectedKeys = [], paramValues = {}, options = {}) {
   const data = await getCatalogData()
 
   const worksDb = data.works.map(toLegacyWorkRow)
@@ -66,16 +66,26 @@ export async function buildEstimateFromSystem(system, selectedKeys = [], paramVa
     throw new Error('System is required')
   }
 
-  const mergedParams = buildMergedParamValues(system, paramValues)
+  const useDefaultOverride = options.useDefaultOverride !== false
+  const defaultOverride = useDefaultOverride ? fullSystem.default_override || system?.default_override || null : null
+
+  const effectiveSelectedKeys = Array.isArray(selectedKeys) && selectedKeys.length
+    ? selectedKeys
+    : (Array.isArray(defaultOverride?.selectedKeys) ? defaultOverride.selectedKeys : [])
+
+  const mergedParams = buildMergedParamValues(system, {
+    ...(defaultOverride?.paramValues || {}),
+    ...(paramValues || {})
+  })
   const scope = createScope(mergedParams)
-  const normalizedSelectedKeys = normalizeSelectedTemplateOptionKeys(selectedKeys)
+  const normalizedSelectedKeys = normalizeSelectedTemplateOptionKeys(effectiveSelectedKeys)
   const selectedSet = new Set(normalizedSelectedKeys)
 
   const formulasMap = new Map(
     formulasDb.map((formula) => [formula.code, formula.expression || ''])
   )
 
-  const sections = buildSections({
+  let sections = buildSections({
     system: fullSystem,
     selectedKeys: normalizedSelectedKeys,
     selectedSet,
@@ -86,6 +96,10 @@ export async function buildEstimateFromSystem(system, selectedKeys = [], paramVa
     coefficientsDb,
     formulasMap
   })
+
+  if (Array.isArray(defaultOverride?.sections) && defaultOverride.sections.length) {
+    sections = normalizeOverrideSections(defaultOverride.sections)
+  }
 
   recalculateSectionRowsByCode(sections, scope, coefficientsDb)
 
@@ -114,6 +128,34 @@ export async function buildEstimateFromSystem(system, selectedKeys = [], paramVa
       }
     ]
   }
+}
+
+
+function normalizeOverrideSections(sections = []) {
+  return sections.map((section, sectionIndex) => ({
+    id: section?.id || crypto.randomUUID(),
+    title: section?.title || `Раздел ${sectionIndex + 1}` ,
+    featureCode: normalizeOptionKey(section?.featureCode || ''),
+    works: normalizeOverrideRows(section?.works, 'work'),
+    materials: normalizeOverrideRows(section?.materials, 'material')
+  }))
+}
+
+function normalizeOverrideRows(rows = [], type = 'item') {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    ...row,
+    id: row?.id || crypto.randomUUID(),
+    code: `${row?.code || row?.cellCode || ''}`.trim(),
+    cellCode: `${row?.cellCode || row?.code || ''}`.trim(),
+    templateCode: `${row?.templateCode || ''}`.trim(),
+    itemCode: row?.itemCode || row?.material_id || row?.work_id || '',
+    supplier: type === 'material' ? (row?.supplier || 'ТехноНИКОЛЬ') : undefined,
+    unit: row?.unit || '',
+    expression: normalizeFormulaExpression(row?.expression || row?.formula || '0'),
+    qty: toNumber(row?.qty, 0),
+    price: toNumber(row?.price, 0),
+    total: toNumber(row?.total, 0)
+  }))
 }
 
 function buildMergedParamValues(system, paramValues) {

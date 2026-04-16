@@ -9,17 +9,6 @@ function normalize(value) {
 
 // Базовые заводские настройки опций
 const BASE_OPTION_BLOCKS = {
-  demolition: {
-    title: 'Демонтаж',
-    sectionCode: 'demolition',
-    codeBases: { work: 10, material: 20 },
-    works: [
-      { name: 'Демонтаж гидроизоляционного слоя', expression: 'demolition_waterproofing_area', unit: 'м2' },
-      { name: 'Демонтаж теплоизоляционного слоя', expression: 'demolition_insulation_area', unit: 'м2' },
-      { name: 'Демонтаж профилированного настила', expression: 'demolition_base_area', unit: 'м2' }
-    ],
-    materials: []
-  },
   rib_fill: {
     title: 'Заполнение гофр / L-профиль',
     sectionCode: 'rib_fill',
@@ -222,41 +211,35 @@ const BASE_OPTION_BLOCKS = {
   }
 }
 
-// Кэш для хранения опций из БД
-let cachedCustomBlocks = {}
-
-// Асинхронно загружаем из БД
-export async function loadCustomOptionBlocks(appMetaRepository) {
+// Функции для загрузки/сохранения пользовательских настроек опций
+export function getCustomOptionBlocks() {
   try {
-    const data = await appMetaRepository.get('eco_roof_custom_options')
-    cachedCustomBlocks = data ? JSON.parse(data) : {}
+    const data = window.localStorage.getItem('eco_roof_custom_options')
+    return data ? JSON.parse(data) : {}
   } catch (e) {
-    console.error('Failed to parse custom options from DB', e)
-    cachedCustomBlocks = {}
+    return {}
   }
 }
 
-// Асинхронно сохраняем в БД
-export async function saveCustomOptionBlocks(appMetaRepository, blocks) {
+export function saveCustomOptionBlocks(blocks) {
   try {
-    const jsonStr = JSON.stringify(blocks)
-    await appMetaRepository.set('eco_roof_custom_options', jsonStr)
-    cachedCustomBlocks = JSON.parse(jsonStr) // Обновляем кэш
+    window.localStorage.setItem('eco_roof_custom_options', JSON.stringify(blocks))
   } catch (e) {
-    console.error('Failed to save custom options to DB', e)
-    throw e
+    console.error('Failed to save custom options', e)
   }
 }
 
-// Получить итоговый словарь (Синхронно из кэша)
+// Получить итоговый словарь: База + Пользовательские изменения
 export function getMergedOptionBlocks() {
   const base = JSON.parse(JSON.stringify(BASE_OPTION_BLOCKS))
-  for (const key in cachedCustomBlocks) {
+  const custom = getCustomOptionBlocks()
+
+  for (const key in custom) {
     if (base[key]) {
-      base[key].works = cachedCustomBlocks[key].works || []
-      base[key].materials = cachedCustomBlocks[key].materials || []
+      base[key].works = custom[key].works || []
+      base[key].materials = custom[key].materials || []
     } else {
-      base[key] = cachedCustomBlocks[key]
+      base[key] = custom[key]
     }
   }
   return base
@@ -274,4 +257,5 @@ export function hasOptionEstimateBlock(key) {
   return Boolean(getMergedOptionBlocks()[normalize(key)])
 }
 
+// Экспортируем константу для обратной совместимости
 export const OPTION_BLOCKS = BASE_OPTION_BLOCKS

@@ -5,6 +5,7 @@ import DirectoriesPage from '@/pages/DirectoriesPage.vue'
 import FormulasPage from '@/pages/FormulasPage.vue'
 import CoefficientsPage from '@/pages/CoefficientsPage.vue'
 import TemplatesPage from '@/pages/TemplatesPage.vue'
+import SmartPirReportPage from '@/pages/SmartPirReportPage.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -14,7 +15,8 @@ const router = createRouter({
     { path: '/directories', name: 'directories', component: DirectoriesPage },
     { path: '/formulas', name: 'formulas', component: FormulasPage },
     { path: '/coefficients', name: 'coefficients', component: CoefficientsPage },
-    { path: '/templates', name: 'templates', component: TemplatesPage }
+    { path: '/templates', name: 'templates', component: TemplatesPage },
+    { path: '/report/smartpir', name: 'smartpir-report', component: SmartPirReportPage }
   ]
 })
 

@@ -44,6 +44,7 @@
               <button class="ui-btn ui-btn-primary" @click="isGlobalOptionsEditorOpen = true">
                 ⚙ Глобальный редактор опций
               </button>
+              <button class="ui-btn ui-btn-primary" @click="createCustomSystem">＋ Создать свою систему</button>
 
               <button class="ui-btn ui-btn-secondary" @click="openSettings">Параметры и опции</button>
               <button class="ui-btn ui-btn-secondary" @click="rebuildFromEtalon">Пересобрать из эталона</button>
@@ -183,9 +184,6 @@ import TemplateParamsModal from '../components/TemplateParamsModal.vue'
 // Импортируем новый компонент
 import AdditionalOptionsEditorModal from '../components/AdditionalOptionsEditorModal.vue'
 
-import { AppMetaRepository } from '../core/repositories/AppMetaRepository'
-import { loadCustomOptionBlocks } from '../modules/templates/optionBlocks'
-
 import { listSystems } from '@/core/services/dataApi'
 import { getSystemTemplate } from '@/core/services/dataApi'
 import { getCatalogData } from '@/core/services/dataApi'
@@ -197,9 +195,6 @@ import { assignExcelCellCodesToSections, nextExcelCellCodeForSections } from '@/
 import { SystemRepository } from '@/core/repositories/SystemRepository'
 
 const systemRepository = new SystemRepository()
-const appMetaRepository = new AppMetaRepository()
-const isDataReady = ref(false)
-
 const route = useRoute()
 const router = useRouter()
 
@@ -256,24 +251,11 @@ const defaultParamsSummary = computed(() => {
 })
 
 onMounted(async () => {
-  try {
-    // 1. Ждем загрузку настроек из БД
-    await loadCustomOptionBlocks(appMetaRepository) 
-    
-    // 2. Грузим каталоги и системы
-    await Promise.all([
-      loadCatalogs(),
-      loadSystemsList()
-    ])
-    
-    const initialCode = `${route.query.system || systems.value[0]?.код || ''}`
-    if (initialCode) {
-      await openSystem(initialCode)
-    }
-    
-    isDataReady.value = true // Всё готово
-  } catch (e) {
-    console.error("Ошибка инициализации:", e)
+  await loadCatalogs()
+  await loadSystemsList()
+  const initialCode = `${route.query.system || systems.value[0]?.код || ''}`
+  if (initialCode) {
+    await openSystem(initialCode)
   }
 })
 
@@ -594,6 +576,28 @@ async function rebuildFromEtalon() {
     paramValues: { ...paramValues.value }
   }
   recalculateZone()
+}
+
+async function createCustomSystem() {
+  if (!selectedSystem.value || !editableZone.value) return
+
+  const suggestedName = `${selectedSystem.value.название} (моя система)`
+  const newName = window.prompt('Название новой системы', suggestedName)?.trim()
+  if (!newName) return
+
+  const created = await systemRepository.createCustomSystemFromExisting({
+    sourceSystemCode: selectedSystem.value.код,
+    newName,
+    overridePayload: {
+      selectedKeys: [...selectedKeys.value],
+      paramValues: { ...paramValues.value },
+      sections: clone(editableZone.value.sections)
+    }
+  })
+
+  await loadSystemsList()
+  await openSystem(created?.code || created?.код || '')
+  window.alert(`Создана новая система: ${created?.name || created?.название || newName}`)
 }
 
 async function saveOverride() {
