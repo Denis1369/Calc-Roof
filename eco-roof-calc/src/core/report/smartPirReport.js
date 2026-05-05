@@ -1,3 +1,5 @@
+import { resolveContractorProfile } from '@/core/report/contractorProfiles'
+
 const REPORT_STORAGE_KEY = 'eco-roof-smartpir-report-html'
 const REPORT_PAYLOAD_STORAGE_KEY = 'eco-roof-smartpir-report-payload'
 
@@ -40,6 +42,14 @@ function formatQty(value) {
 
 function formatMoney(value) {
   return `${formatNumber(value, 2)} ₽`
+}
+
+function buildContractorRequisitesMarkup(contractor) {
+  const lines = Array.isArray(contractor?.requisites) ? contractor.requisites : []
+  return lines
+    .filter(Boolean)
+    .map((line) => `<div class="signature-detail">${escapeHtml(line)}</div>`)
+    .join('')
 }
 
 function getItemTotal(item) {
@@ -239,6 +249,7 @@ export function buildSmartPirReportHtml(payload = {}) {
   const vatRate = toNumber(payload?.vatRate, 0)
   const estimateZones = Array.isArray(payload?.estimateZones) ? payload.estimateZones : []
   const overheadExpenses = Array.isArray(payload?.overheadExpenses) ? payload.overheadExpenses : []
+  const contractor = resolveContractorProfile(payload?.contractorProfile)
 
   const visibleZones = estimateZones.filter((zone) => {
     return (zone?.sections || []).some(hasContent)
@@ -288,6 +299,7 @@ export function buildSmartPirReportHtml(payload = {}) {
   const subtotal = round2(worksTotal + materialsTotal + overheadBlock.total)
   const vatAmount = round2(subtotal * (vatRate / 100))
   const grandTotal = round2(subtotal + vatAmount)
+  const contractorRequisitesMarkup = buildContractorRequisitesMarkup(contractor)
 
   const multiZoneSummary = estimateZones.length > 1
     ? `
@@ -339,6 +351,11 @@ export function buildSmartPirReportHtml(payload = {}) {
           .signature-title {
             font-weight: 700;
             margin-bottom: 6px;
+          }
+          .signature-detail {
+            margin-top: 3px;
+            font-size: 11px;
+            line-height: 1.35;
           }
           .doc-title {
             text-align: center;
@@ -417,9 +434,11 @@ export function buildSmartPirReportHtml(payload = {}) {
           }
           .estimate-table .right {
             text-align: right;
+            white-space: nowrap;
           }
           .estimate-table .strong {
             font-weight: 700;
+            white-space: nowrap;
           }
           .estimate-table .empty {
             color: #64748b;
@@ -472,9 +491,10 @@ export function buildSmartPirReportHtml(payload = {}) {
           <div class="signatures">
             <div class="signature-card">
               <div class="signature-title">«Подрядчик»</div>
-              <div>ООО «СК-ЮГ»</div>
-              <div>ИНН / КПП: 2312330110 / 231201001</div>
-              <div>Ген. директор __________________</div>
+              <div>${escapeHtml(contractor.name)}</div>
+              <div>${escapeHtml(contractor.innKppLabel)}</div>
+              ${contractorRequisitesMarkup}
+              <div>${escapeHtml(contractor.signatureLabel)}</div>
             </div>
 
             <div class="signature-card">

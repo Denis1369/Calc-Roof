@@ -12,11 +12,13 @@ export default defineConfig(() => ({
     }
   },
   build: {
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ['vue', 'vue-router'],
           math: ['mathjs'],
+          excel: ['exceljs'],
           tauri: ['@tauri-apps/plugin-sql', '@tauri-apps/api']
         }
       }

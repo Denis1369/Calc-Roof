@@ -1,33 +1,30 @@
 import { ref } from 'vue'
 
 const STORAGE_KEY = 'eco-roof-theme'
-const theme = ref('dark')
+const LIGHT_THEME = 'light'
+const theme = ref(LIGHT_THEME)
 let initialized = false
 
-function applyTheme(value) {
-  document.documentElement.setAttribute('data-theme', value)
-  localStorage.setItem(STORAGE_KEY, value)
-  theme.value = value
+function applyLightTheme() {
+  document.documentElement.setAttribute('data-theme', LIGHT_THEME)
+  localStorage.setItem(STORAGE_KEY, LIGHT_THEME)
+  theme.value = LIGHT_THEME
 }
 
 export function initTheme() {
   if (initialized) return
 
-  const savedTheme = localStorage.getItem(STORAGE_KEY)
-  const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light')
-
-  applyTheme(initialTheme)
+  applyLightTheme()
   initialized = true
 }
 
 export function useTheme() {
   function toggleTheme() {
-    applyTheme(theme.value === 'dark' ? 'light' : 'dark')
+    applyLightTheme()
   }
 
-  function setTheme(value) {
-    applyTheme(value)
+  function setTheme() {
+    applyLightTheme()
   }
 
   return {

@@ -23,7 +23,7 @@
         </div>
       </aside>
 
-      <section class="content">
+      <section ref="contentRef" class="content">
         <div v-if="!selectedSystem || !editableZone" class="empty-state page-card">
           Выбери систему слева, чтобы настроить, что должно подставляться по умолчанию.
         </div>
@@ -46,10 +46,13 @@
               </button>
               <button class="ui-btn ui-btn-primary" @click="createCustomSystem">＋ Создать свою систему</button>
 
+              <button class="ui-btn ui-btn-primary" @click="continueCalculation">Продолжить расчет</button>
+              <button class="ui-btn ui-btn-secondary" @click="exitWithoutEditing">Выйти без изменений</button>
               <button class="ui-btn ui-btn-secondary" @click="openSettings">Параметры и опции</button>
               <button class="ui-btn ui-btn-secondary" @click="rebuildFromEtalon">Пересобрать из эталона</button>
-              <button class="ui-btn ui-btn-success" @click="saveOverride">Сохранить основу</button>
+              <button class="ui-btn ui-btn-success" @click="saveOverride">Сохранить</button>
               <button class="ui-btn ui-btn-danger" @click="resetOverride">Сбросить основу</button>
+              <button class="ui-btn ui-btn-danger" @click="deleteCurrentSystem">Удалить систему</button>
             </div>
           </div>
 
@@ -87,7 +90,7 @@
           <div v-for="(section, sIdx) in editableZone.sections" :key="section.id" class="section-block">
             <div class="section-header">
               <input v-model="section.title" class="section-title-input" placeholder="Название раздела" />
-              <button class="btn-icon danger-text" @click="removeSection(sIdx)">✕</button>
+              <button class="delete-section-btn" type="button" @click="removeSection(sIdx)">Удалить раздел</button>
             </div>
 
             <EstimateTable
@@ -131,10 +134,12 @@
       :is-open="isOptionsOpen"
       :system="selectedSystem"
       :selected-keys="selectedKeys"
+      :option-order="selectedOptionOrder"
       title="Что включить в основу системы"
-      continue-label="Далее"
-      cancel-label="Отмена"
+      continue-label="Вперед"
+      cancel-label="Назад на 1 шаг"
       @close="isOptionsOpen = false"
+      @order-change="handleOptionsOrderChange"
       @continue="handleOptionsContinue"
     />
 
@@ -145,7 +150,7 @@
       :initial-values="paramValues"
       title="Параметры системы по умолчанию"
       submit-label="Применить"
-      back-label="Назад"
+      back-label="Назад на 1 шаг"
       @close="isParamsOpen = false"
       @back="backToOptions"
       @submit="handleParamsSubmit"
@@ -175,7 +180,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { evaluate } from 'mathjs'
 import EstimateTable from '../components/EstimateTable.vue'
@@ -203,7 +208,9 @@ const systems = ref([])
 const selectedSystemCode = ref('')
 const selectedSystem = ref(null)
 const editableZone = ref(null)
+const contentRef = ref(null)
 const selectedKeys = ref([])
+const selectedOptionOrder = ref([])
 const paramValues = ref({})
 const worksDb = ref([])
 const materialsDb = ref([])
@@ -234,6 +241,11 @@ function normalize(value) {
 
 function round2(value) {
   return Math.round(toNumber(value) * 100) / 100
+}
+
+function showActionError(message, error) {
+  console.error(error)
+  window.alert(message)
 }
 
 const selectedOptionLabels = computed(() => {
@@ -290,17 +302,33 @@ async function openSystem(systemCode) {
     selectedKeys.value = Array.isArray(override?.selectedKeys)
       ? [...override.selectedKeys]
       : (selectedSystem.value.опции || []).filter((item) => item.default).map((item) => item.key)
+    selectedOptionOrder.value = Array.isArray(override?.optionOrder)
+      ? [...override.optionOrder]
+      : [...selectedKeys.value]
     paramValues.value = { ...(override?.paramValues || {}) }
 
-    const estimate = await buildEstimateFromSystem(selectedSystem.value, selectedKeys.value, paramValues.value)
+    const estimate = await buildEstimateFromSystem(selectedSystem.value, selectedKeys.value, paramValues.value, {
+      optionOrder: selectedOptionOrder.value
+    })
     editableZone.value = estimate.estimateZones?.[0] || createEmptyZone()
     recalculateZone()
 
     if (`${route.query.system || ''}` !== systemCode) {
       router.replace({ query: { ...route.query, system: systemCode } })
     }
+
+    await scrollEditorIntoView()
+  } catch (error) {
+    showActionError('Не удалось открыть основу системы.', error)
   } finally {
     loading.value = false
+  }
+}
+
+async function scrollEditorIntoView() {
+  await nextTick()
+  if (window.innerWidth <= 1280 && contentRef.value) {
+    contentRef.value.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 }
 
@@ -341,7 +369,6 @@ function createEmptyMaterial() {
     templateCode: '',
     itemCode: '',
     name: '',
-    supplier: 'ТехноНИКОЛЬ',
     unit: 'м2',
     expression: 'S',
     qty: 0,
@@ -365,18 +392,47 @@ function createEmptyZone() {
   }
 }
 
+function resetWorkLookup(row) {
+  row.itemCode = ''
+}
+
+function resetMaterialLookup(row) {
+  row.itemCode = ''
+  row.material_id = null
+  row.base_name = ''
+  row.variant_id = null
+  row.variant_label = ''
+  row.selectedVariantId = null
+  row.selectedProfileVariantId = null
+  row.profile_name = ''
+  row.profileThickness = null
+  row.thickness = null
+  row.thickness_unit = ''
+  row.profileOptions = []
+  row.variantOptions = []
+}
+
 function findWorkByName(name) {
   const target = normalize(name)
-  return worksDb.value.find((item) => normalize(item.наименование_работы) === target)
-    || worksDb.value.find((item) => normalize(item.наименование_работы).includes(target) || target.includes(normalize(item.наименование_работы)))
-    || null
+  if (!target) return null
+  return worksDb.value.find((item) => normalize(item.наименование_работы) === target) || null
+}
+
+function findWorkFromPayload(payload, fallbackName = '') {
+  const selected = payload?.selected || null
+  const selectedId = selected?.id || selected?.идентификатор || null
+  if (selectedId) {
+    const foundById = worksDb.value.find((item) => Number(item.идентификатор) === Number(selectedId))
+    if (foundById) return foundById
+  }
+
+  return findWorkByName(selected?.name || selected?.наименование_работы || fallbackName)
 }
 
 function findMaterialByName(name) {
   const target = normalize(name)
-  return materialsDb.value.find((item) => normalize(item.полное_наименование_материала) === target)
-    || materialsDb.value.find((item) => normalize(item.полное_наименование_материала).includes(target) || target.includes(normalize(item.полное_наименование_материала)))
-    || null
+  if (!target) return null
+  return materialsDb.value.find((item) => normalize(item.полное_наименование_материала) === target) || null
 }
 
 function replaceCoefficients(expression) {
@@ -412,6 +468,41 @@ function getWorkPriceByArea(workRow, area) {
   if (value <= 15000) return toNumber(workRow?.цена_6000_15000, 0)
   if (value <= 30000) return toNumber(workRow?.цена_15000_30000, 0)
   return toNumber(workRow?.цена_более_30000, 0)
+}
+
+function inferWorkExpression(workRow, section = null) {
+  const name = normalize(workRow?.наименование_работы || '')
+  const unit = normalize(workRow?.единица_измерения_работы || '')
+  const sectionTitle = normalize(section?.title || '')
+  const identity = `${name} ${sectionTitle}`
+
+  if (identity.includes('ворон')) {
+    if (identity.includes('наруж') || identity.includes('парапет')) return 'OD'
+    return 'ID'
+  }
+
+  if (identity.includes('аэратор')) return 'A'
+  if (identity.includes('пешеход') || identity.includes('дорож')) return 'WL'
+  if (identity.includes('деформац')) return 'D'
+  if (identity.includes('огражден')) return 'GR'
+  if (identity.includes('фахвер')) return 'FW'
+  if (identity.includes('дым')) return 'SH'
+  if (identity.includes('вентшах')) return 'VS'
+  if (identity.includes('проходк')) return 'PT'
+
+  if (
+    unit.includes('м/п') ||
+    unit.includes('п.м') ||
+    unit === 'м' ||
+    identity.includes('парапет') ||
+    identity.includes('примыкан') ||
+    identity.includes('планк')
+  ) {
+    return 'P'
+  }
+
+  if (unit.includes('шт')) return '1'
+  return 'S'
 }
 
 function buildScope(zone) {
@@ -454,6 +545,8 @@ function recalculateZone() {
         work.itemCode = found.идентификатор
         work.unit = found.единица_измерения_работы || work.unit
         work.price = Number.isFinite(Number(work.price)) ? Number(work.price) : getWorkPriceByArea(found, editableZone.value?.roofParams?.area)
+      } else {
+        resetWorkLookup(work)
       }
       work.qty = evaluateExpression(work.expression, scope)
       work.total = round2(work.qty * toNumber(work.price))
@@ -467,6 +560,8 @@ function recalculateZone() {
         material.itemCode = found.артикул_товара || found.идентификатор
         material.unit = found.единица_измерения || material.unit
         material.price = Number.isFinite(Number(material.price)) ? Number(material.price) : toNumber(found.базовая_цена, 0)
+      } else {
+        resetMaterialLookup(material)
       }
       material.qty = evaluateExpression(material.expression, scope)
       material.total = round2(material.qty * toNumber(material.price))
@@ -517,12 +612,20 @@ function removeMaterial(section, index) {
 function onWorkNameChange(payload, section) {
   const row = section.works[payload] || payload?.item || payload || null
   if (!row) return
-  const found = findWorkByName(row.name)
+  const previousItemCode = `${row.itemCode || ''}`
+  const found = findWorkFromPayload(payload, row.name)
+  const shouldUpdateExpression = Boolean(payload?.selected) || `${found?.идентификатор || ''}` !== previousItemCode
+
   if (found) {
     row.itemCode = found.идентификатор
     row.name = found.наименование_работы
     row.unit = found.единица_измерения_работы || row.unit
     row.price = getWorkPriceByArea(found, editableZone.value?.roofParams?.area)
+    if (shouldUpdateExpression) {
+      row.expression = inferWorkExpression(found, section)
+    }
+  } else {
+    resetWorkLookup(row)
   }
   recalculateZone()
 }
@@ -536,6 +639,8 @@ function onMaterialNameChange(payload, section) {
     row.name = found.полное_наименование_материала
     row.unit = found.единица_измерения || row.unit
     row.price = toNumber(found.базовая_цена, row.price)
+  } else {
+    resetMaterialLookup(row)
   }
   recalculateZone()
 }
@@ -550,7 +655,23 @@ function openSettings() {
   isOptionsOpen.value = true
 }
 
-function handleOptionsContinue(keys) {
+function continueCalculation() {
+  const systemCode = selectedSystem.value?.код || selectedSystem.value?.code || ''
+  router.push(systemCode ? { path: '/systems', query: { system: systemCode } } : '/systems')
+}
+
+function exitWithoutEditing() {
+  router.push('/systems')
+}
+
+function handleOptionsOrderChange(order) {
+  selectedOptionOrder.value = Array.isArray(order) ? [...order] : []
+}
+
+function handleOptionsContinue(keys, order = []) {
+  if (Array.isArray(order) && order.length) {
+    handleOptionsOrderChange(order)
+  }
   selectedKeys.value = [...keys]
   isOptionsOpen.value = false
   isParamsOpen.value = true
@@ -562,66 +683,131 @@ function backToOptions() {
 }
 
 async function handleParamsSubmit(values) {
-  paramValues.value = sanitizeTemplateParamValues(selectedSystem.value, selectedKeys.value, values)
-  isParamsOpen.value = false
-  await rebuildFromEtalon()
+  try {
+    paramValues.value = sanitizeTemplateParamValues(selectedSystem.value, selectedKeys.value, values)
+    isParamsOpen.value = false
+    await rebuildFromEtalon()
+  } catch (error) {
+    isParamsOpen.value = true
+    showActionError('Не удалось пересобрать систему по выбранным параметрам.', error)
+  }
 }
 
 async function rebuildFromEtalon() {
   if (!selectedSystem.value) return
-  const estimate = await buildEstimateFromSystem(selectedSystem.value, selectedKeys.value, paramValues.value, { useDefaultOverride: false })
-  editableZone.value = estimate.estimateZones?.[0] || createEmptyZone()
-  editableZone.value.templateMeta = {
-    ...(editableZone.value.templateMeta || {}),
-    paramValues: { ...paramValues.value }
+  try {
+    const estimate = await buildEstimateFromSystem(selectedSystem.value, selectedKeys.value, paramValues.value, {
+      useDefaultOverride: false,
+      optionOrder: selectedOptionOrder.value
+    })
+    editableZone.value = estimate.estimateZones?.[0] || createEmptyZone()
+    editableZone.value.templateMeta = {
+      ...(editableZone.value.templateMeta || {}),
+      paramValues: { ...paramValues.value }
+    }
+    recalculateZone()
+  } catch (error) {
+    showActionError('Не удалось пересобрать основу системы.', error)
+    throw error
   }
-  recalculateZone()
 }
 
 async function createCustomSystem() {
-  if (!selectedSystem.value || !editableZone.value) return
+  try {
+    if (!selectedSystem.value || !editableZone.value) return
 
-  const suggestedName = `${selectedSystem.value.название} (моя система)`
-  const newName = window.prompt('Название новой системы', suggestedName)?.trim()
-  if (!newName) return
+    const suggestedName = `${selectedSystem.value.название} (моя система)`
+    const newName = window.prompt('Название новой системы', suggestedName)?.trim()
+    if (!newName) return
 
-  const created = await systemRepository.createCustomSystemFromExisting({
-    sourceSystemCode: selectedSystem.value.код,
-    newName,
-    overridePayload: {
-      selectedKeys: [...selectedKeys.value],
-      paramValues: { ...paramValues.value },
-      sections: clone(editableZone.value.sections)
-    }
-  })
+    const created = await systemRepository.createCustomSystemFromExisting({
+      sourceSystemCode: selectedSystem.value.код,
+      newName,
+      overridePayload: {
+        selectedKeys: [...selectedKeys.value],
+        optionOrder: [...selectedOptionOrder.value],
+        paramValues: { ...paramValues.value },
+        sections: clone(editableZone.value.sections)
+      }
+    })
 
-  await loadSystemsList()
-  await openSystem(created?.code || created?.код || '')
-  window.alert(`Создана новая система: ${created?.name || created?.название || newName}`)
+    await loadSystemsList()
+    await openSystem(created?.code || created?.код || '')
+    window.alert(`Создана новая система: ${created?.name || created?.название || newName}`)
+  } catch (error) {
+    showActionError('Не удалось создать пользовательскую систему.', error)
+  }
 }
 
 async function saveOverride() {
-  if (!selectedSystem.value || !editableZone.value) return
+  try {
+    if (!selectedSystem.value || !editableZone.value) return
 
-  await systemRepository.saveSystemDefaultOverride({
-    systemCode: selectedSystem.value.код,
-    title: selectedSystem.value.название,
-    payload: {
-      selectedKeys: [...selectedKeys.value],
-      paramValues: { ...paramValues.value },
-      sections: clone(editableZone.value.sections)
-    }
-  })
+    await systemRepository.saveSystemDefaultOverride({
+      systemCode: selectedSystem.value.код,
+      title: selectedSystem.value.название,
+      payload: {
+        selectedKeys: [...selectedKeys.value],
+        optionOrder: [...selectedOptionOrder.value],
+        paramValues: { ...paramValues.value },
+        sections: clone(editableZone.value.sections)
+      }
+    })
 
-  window.alert('Основа системы сохранена.')
-  await openSystem(selectedSystem.value.код)
+    window.alert('Основа системы сохранена.')
+    await openSystem(selectedSystem.value.код)
+  } catch (error) {
+    showActionError('Не удалось сохранить основу системы.', error)
+  }
 }
 
 async function resetOverride() {
-  if (!selectedSystem.value) return
-  if (!window.confirm('Сбросить сохранённую основу системы и вернуться к эталону?')) return
-  await systemRepository.deleteSystemDefaultOverride(selectedSystem.value.код)
-  await openSystem(selectedSystem.value.код)
+  try {
+    if (!selectedSystem.value) return
+    if (!window.confirm('Сбросить сохранённую основу системы и вернуться к эталону?')) return
+    await systemRepository.deleteSystemDefaultOverride(selectedSystem.value.код)
+    await openSystem(selectedSystem.value.код)
+  } catch (error) {
+    showActionError('Не удалось сбросить сохранённую основу системы.', error)
+  }
+}
+
+async function deleteCurrentSystem() {
+  try {
+    if (!selectedSystem.value) return
+
+    const deletedName = selectedSystem.value.название || selectedSystem.value.name || selectedSystem.value.код
+    const deletedCode = selectedSystem.value.код || selectedSystem.value.code
+    const confirmed = window.confirm(
+      `Удалить систему «${deletedName}»?\n\nЭто также удалит сохранённую основу и сохранённые конфигурации этой системы.`
+    )
+
+    if (!confirmed) return
+
+    await systemRepository.deleteSystem(deletedCode)
+
+    selectedSystemCode.value = ''
+    selectedSystem.value = null
+    editableZone.value = null
+    selectedKeys.value = []
+    selectedOptionOrder.value = []
+    paramValues.value = {}
+    isOptionsOpen.value = false
+    isParamsOpen.value = false
+
+    await loadSystemsList()
+
+    const nextCode = systems.value[0]?.код || ''
+    if (nextCode) {
+      await openSystem(nextCode)
+    } else {
+      await router.replace({ query: {} })
+    }
+
+    window.alert(`Система «${deletedName}» удалена.`)
+  } catch (error) {
+    showActionError('Не удалось удалить систему.', error)
+  }
 }
 </script>
 
@@ -788,6 +974,20 @@ async function resetOverride() {
   font-weight: 700;
 }
 
+.delete-section-btn {
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.delete-section-btn:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
 .add-section-row {
   display: flex;
   justify-content: center;
@@ -802,6 +1002,11 @@ async function resetOverride() {
 @media (max-width: 1280px) {
   .layout {
     grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    max-height: 45vh;
+    overflow-y: auto;
   }
 
   .params-grid {

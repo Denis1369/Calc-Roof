@@ -3,37 +3,87 @@
     <div class="table-subtitle">{{ title }}</div>
 
     <div v-if="items.length > 0" class="table-wrapper">
-      <table class="data-table" :class="type === 'work' ? 'works-table' : 'mat-table'">
+      <table
+        class="data-table"
+        :class="type === 'work' ? 'works-table' : 'mat-table'"
+        :style="{ minWidth: `${tableMinWidth}px` }"
+      >
         <thead>
           <tr>
-            <th class="col-code">Код ячейки</th>
-            <th class="col-name">Наименование {{ type === 'work' ? 'работ' : 'материалов' }}</th>
-            <th v-if="type === 'material'" class="col-variant">Профиль / вариант</th>
-            <th v-if="type === 'material'" class="col-thickness">Толщина, мм</th>
-            <th v-if="type === 'material'" class="col-supplier">Тип / Поставщик</th>
-            <th class="col-unit">Ед.изм.</th>
-            <th class="col-formula">Формула расчета</th>
-            <th class="col-qty">Кол-во</th>
-            <th class="col-price">Цена за ед.</th>
-            <th class="col-sum">Сумма</th>
-            <th class="col-action hide-on-print"></th>
+            <th class="col-code" :style="colStyle('code')">
+              Код ячейки
+              <div class="resizer hide-on-print" @mousedown.stop="startResize($event, 'code')"></div>
+            </th>
+            <th class="col-name" :style="colStyle('name')">
+              Наименование {{ type === 'work' ? 'работ' : 'материалов' }}
+              <div class="resizer hide-on-print" @mousedown.stop="startResize($event, 'name')"></div>
+            </th>
+            <th v-if="type === 'material'" class="col-variant" :style="colStyle('variant')">
+              Профиль / вариант
+              <div class="resizer hide-on-print" @mousedown.stop="startResize($event, 'variant')"></div>
+            </th>
+            <th v-if="type === 'material'" class="col-thickness" :style="colStyle('thickness')">
+              Толщина, мм
+              <div class="resizer hide-on-print" @mousedown.stop="startResize($event, 'thickness')"></div>
+            </th>
+            <th class="col-unit" :style="colStyle('unit')">
+              Ед.изм.
+              <div class="resizer hide-on-print" @mousedown.stop="startResize($event, 'unit')"></div>
+            </th>
+            <th class="col-formula" :style="colStyle('formula')">
+              Формула расчета
+              <div class="resizer hide-on-print" @mousedown.stop="startResize($event, 'formula')"></div>
+            </th>
+            <th class="col-qty" :style="colStyle('qty')">
+              Кол-во
+              <div class="resizer hide-on-print" @mousedown.stop="startResize($event, 'qty')"></div>
+            </th>
+            <th class="col-price" :style="colStyle('price')">
+              Цена за ед.
+              <div class="resizer hide-on-print" @mousedown.stop="startResize($event, 'price')"></div>
+            </th>
+            <th class="col-sum" :style="colStyle('sum')">
+              Сумма
+              <div class="resizer hide-on-print" @mousedown.stop="startResize($event, 'sum')"></div>
+            </th>
+            <th class="col-action hide-on-print" :style="colStyle('action')"></th>
           </tr>
         </thead>
 
         <tbody>
-          <tr v-for="(item, idx) in items" :key="item.id || item.key || idx">
+          <tr
+            v-for="(item, idx) in items"
+            :key="item.id || item.key || idx"
+            :data-estimate-row-id="item.id || item.key || idx"
+            :class="{ 'row-highlighted': `${item.id || item.key || idx}` === `${props.highlightedRowId}` }"
+          >
             <td class="center bold accent-text" :title="buildCodeTitle(item)">
               {{ item.code || '—' }}
             </td>
 
-            <td>
-              <input
-                v-model="item.name"
-                :list="listId"
-                @change="handleNameChange(item)"
-                class="cell-input text-left"
-                placeholder="Начните вводить для поиска..."
-              />
+            <td class="name-cell">
+              <div class="autocomplete-cell">
+                <input
+                  v-model="item.name"
+                  @input="handleNameInput(item, idx, $event)"
+                  @focus="openNameSuggestions(item, idx, $event)"
+                  @change="handleNameChange(item)"
+                  @keydown="handleNameKeydown($event, item, idx)"
+                  autocomplete="off"
+                  class="cell-input text-left name-input"
+                  placeholder="Начните вводить для поиска..."
+                  :title="item.name"
+                />
+                <button
+                  class="suggestion-toggle"
+                  type="button"
+                  title="Показать варианты"
+                  @mousedown.prevent
+                  @click="toggleNameSuggestions(item, idx, $event)"
+                >
+                  ▼
+                </button>
+              </div>
             </td>
 
             <td v-if="type === 'material'" class="center">
@@ -63,7 +113,7 @@
                 </option>
               </select>
 
-              <div v-else class="variant-empty">—</div>
+              <div v-else class="variant-empty">{{ formatMaterialVariant(item) }}</div>
             </td>
 
             <td v-if="type === 'material'" class="center">
@@ -77,14 +127,7 @@
                   {{ value }}
                 </option>
               </select>
-              <div v-else class="variant-empty">—</div>
-            </td>
-
-            <td v-if="type === 'material'" class="center">
-              <select v-model="item.supplier" class="cell-input center supplier-select">
-                <option value="ТехноНИКОЛЬ">ТехноНИКОЛЬ</option>
-                <option value="Аналог">Аналог</option>
-              </select>
+              <div v-else class="variant-empty">{{ formatMaterialThickness(item) }}</div>
             </td>
 
             <td class="center">
@@ -94,7 +137,7 @@
             <td>
               <input
                 v-model="item.expression"
-                @change="$emit('changeFormula', item)"
+                @change="handleFormulaEdit(item)"
                 @input="$emit('recalculate')"
                 list="formulas-list"
                 class="cell-input formula-input center"
@@ -102,7 +145,16 @@
               />
             </td>
 
-            <td class="center bold qty-display">{{ item.qty }}</td>
+            <td class="center">
+              <input
+                v-model.number="item.qty"
+                type="number"
+                step="0.001"
+                class="cell-input center qty-input bold"
+                title="Можно ввести количество вручную. Формула станет фиксированным числом."
+                @change="handleQtyEdit(item)"
+              />
+            </td>
 
             <td>
               <input type="number" v-model.number="item.price" class="cell-input right" />
@@ -125,6 +177,38 @@
       </div>
     </div>
 
+    <div v-else class="empty-items ui-card-soft">
+      Нет {{ type === 'work' ? 'работ' : 'материалов' }}. Можно добавить строку ниже или удалить весь раздел кнопкой «Удалить раздел» в заголовке.
+    </div>
+
+    <Teleport to="body">
+      <div
+        v-if="activeAutocomplete.item"
+        ref="dropdownRef"
+        class="autocomplete-menu"
+        :style="dropdownStyle"
+      >
+        <button
+          v-for="(option, optionIndex) in activeAutocomplete.options"
+          :key="option.key"
+          type="button"
+          class="autocomplete-option"
+          :class="{ highlighted: optionIndex === activeAutocomplete.highlightedIndex }"
+          :title="option.label"
+          @mousedown.prevent
+          @click="selectNameSuggestion(option)"
+          @mouseenter="activeAutocomplete.highlightedIndex = optionIndex"
+        >
+          <span class="autocomplete-option-title">{{ option.label }}</span>
+          <span v-if="option.meta" class="autocomplete-option-meta">{{ option.meta }}</span>
+        </button>
+
+        <div v-if="!activeAutocomplete.options.length" class="autocomplete-empty">
+          Ничего не найдено. Можно ввести своё название вручную.
+        </div>
+      </div>
+    </Teleport>
+
     <button @click="$emit('add')" class="btn-text hide-on-print mt-1">
       + Добавить {{ type === 'work' ? 'работу' : 'материал' }}
     </button>
@@ -132,14 +216,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { getCatalogData } from '@/core/services/dataApi'
 
 const props = defineProps({
   title: String,
   type: String,
   items: Array,
-  listId: String
+  listId: String,
+  highlightedRowId: { type: String, default: '' }
 })
 
 const emit = defineEmits(['changeName', 'changeFormula', 'recalculate', 'remove', 'add'])
@@ -163,12 +248,94 @@ const totalSum = computed(() => {
 
 const materialCache = new Map()
 let materialCatalog = []
+let workCatalog = []
 const profileThicknessOptions = [0.65, 0.7, 0.75, 0.8, 0.9, 1.0, 1.2]
+const colWidths = reactive({
+  code: 84,
+  name: 360,
+  variant: 180,
+  thickness: 104,
+  unit: 72,
+  formula: 170,
+  qty: 96,
+  price: 116,
+  sum: 140,
+  action: 48
+})
+const activeAutocomplete = reactive({
+  key: '',
+  item: null,
+  options: [],
+  highlightedIndex: 0
+})
+const dropdownStyle = ref({})
+const dropdownRef = ref(null)
+let activeAnchorEl = null
+let resizeKey = ''
+let resizeStartX = 0
+let resizeStartWidth = 0
+
+const tableMinWidth = computed(() => {
+  const materialExtra = props.type === 'material'
+    ? colWidths.variant + colWidths.thickness
+    : 0
+
+  return (
+    colWidths.code +
+    colWidths.name +
+    materialExtra +
+    colWidths.unit +
+    colWidths.formula +
+    colWidths.qty +
+    colWidths.price +
+    colWidths.sum +
+    colWidths.action
+  )
+})
 
 onMounted(async () => {
   await ensureCatalogLoaded()
   await ensureVariantsLoaded()
+  document.addEventListener('mousedown', handleDocumentMouseDown)
+  window.addEventListener('resize', updateDropdownPosition)
+  window.addEventListener('scroll', updateDropdownPosition, true)
 })
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleDocumentMouseDown)
+  document.removeEventListener('mousemove', handleResizeMove)
+  document.removeEventListener('mouseup', stopResize)
+  window.removeEventListener('resize', updateDropdownPosition)
+  window.removeEventListener('scroll', updateDropdownPosition, true)
+})
+
+function colStyle(key) {
+  return {
+    width: `${colWidths[key]}px`,
+    minWidth: `${colWidths[key]}px`
+  }
+}
+
+function startResize(event, key) {
+  resizeKey = key
+  resizeStartX = event.clientX
+  resizeStartWidth = colWidths[key]
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', handleResizeMove)
+  document.addEventListener('mouseup', stopResize)
+}
+
+function handleResizeMove(event) {
+  if (!resizeKey) return
+  colWidths[resizeKey] = Math.max(54, resizeStartWidth + (event.clientX - resizeStartX))
+}
+
+function stopResize() {
+  resizeKey = ''
+  document.body.style.userSelect = ''
+  document.removeEventListener('mousemove', handleResizeMove)
+  document.removeEventListener('mouseup', stopResize)
+}
 
 watch(
   () => props.items?.map(item => `${item.name || ''}|${item.base_name || ''}|${item.material_id || ''}|${item.profile_name || ''}`).join('||'),
@@ -179,15 +346,43 @@ watch(
 )
 
 async function ensureCatalogLoaded() {
-  if (materialCatalog.length) return
+  if (materialCatalog.length && workCatalog.length) return
   const data = await getCatalogData()
   materialCatalog = Array.isArray(data.materials) ? data.materials : []
+  workCatalog = Array.isArray(data.works) ? data.works : []
 }
 
 async function handleNameChange(item) {
   emit('changeName', item)
   await ensureVariantsLoadedForItem(item, true)
   emit('recalculate')
+}
+
+function handleQtyEdit(item) {
+  const value = Number(item.qty)
+  item.manualQty = true
+  item.expression = Number.isFinite(value) ? `${value}` : '0'
+  emit('changeFormula', item)
+  emit('recalculate')
+}
+
+function handleFormulaEdit(item) {
+  item.manualQty = false
+  emit('changeFormula', item)
+  emit('recalculate')
+}
+
+function handleNameInput(item, index, event) {
+  if (props.type === 'material') {
+    const currentName = normalize(item.name)
+    const selectedName = normalize(item.base_name || '')
+
+    if (selectedName && currentName !== selectedName) {
+      clearMaterialSelection(item)
+    }
+  }
+
+  openNameSuggestions(item, index, event)
 }
 
 async function ensureVariantsLoaded() {
@@ -202,8 +397,11 @@ async function ensureVariantsLoadedForItem(item, forceReload) {
   if (props.type !== 'material') return
   await ensureCatalogLoaded()
 
-  const sourceName = `${item.base_name || item.name || item.profile_name || ''}`.trim()
-  if (!sourceName) return
+  const sourceName = `${item.material_id ? (item.base_name || item.name) : (item.name || item.base_name || item.profile_name || '')}`.trim()
+  if (!sourceName) {
+    clearMaterialSelection(item)
+    return
+  }
 
   const cacheKey = normalize(sourceName)
 
@@ -215,10 +413,7 @@ async function ensureVariantsLoadedForItem(item, forceReload) {
   const material = findBaseMaterial(item)
 
   if (!material) {
-    item.variantOptions = []
-    item.profileOptions = []
-    item.selectedVariantId = null
-    item.selectedProfileVariantId = null
+    clearMaterialSelection(item)
     return
   }
 
@@ -233,10 +428,7 @@ function applyMaterialLookup(item, payload, emitRecalculate) {
   const variants = Array.isArray(payload?.variants) ? payload.variants : []
 
   if (!material) {
-    item.variantOptions = []
-    item.profileOptions = []
-    item.selectedVariantId = null
-    item.selectedProfileVariantId = null
+    clearMaterialSelection(item)
     return
   }
 
@@ -280,6 +472,22 @@ function applyMaterialLookup(item, payload, emitRecalculate) {
   } else if (item.variantOptions.length > 0) {
     applyVariantToItem(item, item.variantOptions[0], emitRecalculate)
   }
+}
+
+function clearMaterialSelection(item) {
+  item.itemCode = ''
+  item.material_id = null
+  item.base_name = ''
+  item.variant_id = null
+  item.variant_label = ''
+  item.selectedVariantId = null
+  item.selectedProfileVariantId = null
+  item.profile_name = ''
+  item.profileThickness = null
+  item.thickness = null
+  item.thickness_unit = ''
+  item.profileOptions = []
+  item.variantOptions = []
 }
 
 function resolveSelectedVariant(item) {
@@ -374,6 +582,19 @@ function formatVariantLabel(variant) {
   return variant.variant_label || variant.sku || `Вариант ${variant.id}`
 }
 
+function formatMaterialVariant(item) {
+  return item?.variant_label || item?.profile_name || '—'
+}
+
+function formatMaterialThickness(item) {
+  const thickness = Number(item?.thickness || item?.profileThickness || 0)
+  if (thickness > 0) {
+    return `${thickness}`
+  }
+
+  return item?.thickness_label || '—'
+}
+
 function findBaseMaterial(item) {
   if (item.material_id) {
     const byId = materialCatalog.find(material => Number(material.id) === Number(item.material_id))
@@ -398,15 +619,9 @@ function findBaseMaterial(item) {
 
     found = materialCatalog.find(
       material => Array.isArray(material.variants) && material.variants.some(variant =>
-        normalize(variant.profile_name).includes(target) || normalize(variant.variant_label).includes(target)
+        normalize(variant.profile_name) === target || normalize(variant.variant_label) === target
       )
     )
-    if (found) return found
-
-    found = materialCatalog.find(material => normalize(material.base_name).includes(target))
-    if (found) return found
-
-    found = materialCatalog.find(material => normalize(material.display_name).includes(target))
     if (found) return found
   }
 
@@ -423,6 +638,168 @@ function isProfileSheetMaterial(material) {
 
 function normalize(value) {
   return `${value || ''}`.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function itemKey(item, index) {
+  return `${item?.id || item?.code || item?.cellCode || index || 'row'}`
+}
+
+function getCatalogOptions(item) {
+  const source = props.type === 'work' ? workCatalog : materialCatalog
+
+  return source.map((entry, index) => {
+    if (props.type === 'work') {
+      return {
+        key: `work-${entry.id || index}`,
+        label: entry.name || '',
+        meta: [entry.category, entry.unit].filter(Boolean).join(' · '),
+        raw: entry
+      }
+    }
+
+    return {
+      key: `material-${entry.id || index}`,
+      label: entry.display_name || entry.base_name || '',
+      meta: [entry.subcategory, entry.unit].filter(Boolean).join(' · '),
+      raw: entry
+    }
+  }).filter((option) => option.label)
+}
+
+function buildSuggestionOptions(item, showAll = false) {
+  const query = normalize(item?.name || '')
+  const tokens = query.split(' ').filter(Boolean)
+
+  let options = getCatalogOptions(item)
+  if (!showAll && tokens.length) {
+    options = options.filter((option) => {
+      const haystack = normalize(`${option.label} ${option.meta || ''}`)
+      return tokens.every((token) => haystack.includes(token))
+    })
+  }
+
+  return options
+    .sort((left, right) => {
+      const leftLabel = normalize(left.label)
+      const rightLabel = normalize(right.label)
+      const leftStarts = query && leftLabel.startsWith(query) ? 0 : 1
+      const rightStarts = query && rightLabel.startsWith(query) ? 0 : 1
+      if (leftStarts !== rightStarts) return leftStarts - rightStarts
+      return left.label.localeCompare(right.label, 'ru')
+    })
+    .slice(0, 80)
+}
+
+async function openNameSuggestions(item, index, event, showAll = false) {
+  await ensureCatalogLoaded()
+  activeAnchorEl = event?.currentTarget?.closest?.('.autocomplete-cell') || event?.currentTarget || activeAnchorEl
+  activeAutocomplete.key = itemKey(item, index)
+  activeAutocomplete.item = item
+  activeAutocomplete.options = buildSuggestionOptions(item, showAll)
+  activeAutocomplete.highlightedIndex = 0
+  await nextTick()
+  updateDropdownPosition()
+}
+
+function closeNameSuggestions() {
+  activeAutocomplete.key = ''
+  activeAutocomplete.item = null
+  activeAutocomplete.options = []
+  activeAutocomplete.highlightedIndex = 0
+  activeAnchorEl = null
+}
+
+async function toggleNameSuggestions(item, index, event) {
+  if (activeAutocomplete.item === item) {
+    closeNameSuggestions()
+    return
+  }
+
+  await openNameSuggestions(item, index, event, true)
+}
+
+function handleNameKeydown(event, item, index) {
+  const isOpen = activeAutocomplete.item === item
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    if (!isOpen) {
+      openNameSuggestions(item, index, event, true)
+      return
+    }
+    activeAutocomplete.highlightedIndex = Math.min(
+      activeAutocomplete.highlightedIndex + 1,
+      Math.max(activeAutocomplete.options.length - 1, 0)
+    )
+    return
+  }
+
+  if (event.key === 'ArrowUp' && isOpen) {
+    event.preventDefault()
+    activeAutocomplete.highlightedIndex = Math.max(activeAutocomplete.highlightedIndex - 1, 0)
+    return
+  }
+
+  if (event.key === 'Enter' && isOpen && activeAutocomplete.options.length) {
+    event.preventDefault()
+    selectNameSuggestion(activeAutocomplete.options[activeAutocomplete.highlightedIndex] || activeAutocomplete.options[0])
+    return
+  }
+
+  if (event.key === 'Escape' && isOpen) {
+    event.preventDefault()
+    closeNameSuggestions()
+  }
+}
+
+async function selectNameSuggestion(option) {
+  const item = activeAutocomplete.item
+  if (!item || !option) return
+
+  item.name = option.label
+  closeNameSuggestions()
+
+  emit('changeName', {
+    item,
+    name: option.label,
+    selected: option.raw,
+    type: props.type
+  })
+
+  if (props.type === 'material') {
+    await ensureVariantsLoadedForItem(item, true)
+  }
+
+  emit('recalculate')
+}
+
+function updateDropdownPosition() {
+  if (!activeAnchorEl || !activeAutocomplete.item) return
+
+  const rect = activeAnchorEl.getBoundingClientRect()
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+  const width = Math.min(Math.max(rect.width, 520), Math.max(viewportWidth - 24, rect.width))
+  const left = Math.max(12, Math.min(rect.left, viewportWidth - width - 12))
+  const spaceBelow = viewportHeight - rect.bottom - 12
+  const spaceAbove = rect.top - 12
+  const openAbove = spaceBelow < 180 && spaceAbove > spaceBelow
+  const maxHeight = Math.max(160, Math.min(360, openAbove ? spaceAbove : spaceBelow))
+  const top = openAbove ? Math.max(12, rect.top - maxHeight - 6) : rect.bottom + 6
+
+  dropdownStyle.value = {
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${width}px`,
+    maxHeight: `${maxHeight}px`
+  }
+}
+
+function handleDocumentMouseDown(event) {
+  if (!activeAutocomplete.item) return
+  if (dropdownRef.value?.contains(event.target)) return
+  if (activeAnchorEl?.contains?.(event.target)) return
+  closeNameSuggestions()
 }
 </script>
 
@@ -448,15 +825,17 @@ function normalize(value) {
 }
 
 .table-wrapper {
-  overflow-x: auto;
+  overflow: auto;
   border: 1px solid var(--border-color);
   border-radius: 14px;
+  padding-bottom: 8px;
+  scrollbar-gutter: stable both-edges;
 }
 
 .data-table {
-  width: 100%;
+  width: max-content;
   border-collapse: collapse;
-  min-width: 1150px;
+  table-layout: fixed;
 }
 
 .data-table th,
@@ -468,24 +847,65 @@ function normalize(value) {
 }
 
 .data-table th {
+  position: relative;
   background: var(--bg-card-soft);
   color: var(--text-soft);
   padding: 12px 8px;
   font-size: 13px;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.col-code { width: 90px; }
-.col-name { width: 360px; }
-.col-variant { width: 190px; }
-.col-thickness { width: 120px; }
-.col-supplier { width: 150px; }
-.col-unit { width: 80px; }
-.col-formula { width: 180px; }
-.col-qty { width: 110px; }
-.col-price { width: 120px; }
-.col-sum { width: 140px; }
-.col-action { width: 54px; }
+.data-table tr.row-highlighted td {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.resizer:hover,
+.resizer:active {
+  background: var(--accent);
+}
+
+.name-cell {
+  position: relative;
+}
+
+.autocomplete-cell {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.name-input {
+  padding-right: 36px;
+}
+
+.suggestion-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 34px;
+  height: 100%;
+  border: none;
+  border-left: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.suggestion-toggle:hover {
+  background: var(--bg-hover);
+}
 
 .cell-input {
   width: 100%;
@@ -495,6 +915,7 @@ function normalize(value) {
   color: var(--text-main);
   font: inherit;
   box-sizing: border-box;
+  min-height: 44px;
 }
 
 .cell-input:focus {
@@ -503,7 +924,6 @@ function normalize(value) {
 }
 
 .variant-select,
-.supplier-select,
 .formula-input {
   text-align: center;
 }
@@ -513,8 +933,8 @@ function normalize(value) {
   padding: 10px;
 }
 
-.qty-display {
-  padding: 10px;
+.qty-input {
+  color: var(--text-main);
 }
 
 .subtotal-row {
@@ -524,6 +944,7 @@ function normalize(value) {
   padding: 12px 14px;
   background: var(--bg-card-soft);
   border-top: 1px solid var(--border-color);
+  white-space: nowrap;
 }
 
 .subtotal-label {
@@ -533,6 +954,12 @@ function normalize(value) {
 .subtotal-value {
   color: var(--accent);
   font-weight: 800;
+  white-space: nowrap;
+}
+
+.col-sum,
+.data-table td.right {
+  white-space: nowrap;
 }
 
 .btn-text {
@@ -552,6 +979,13 @@ function normalize(value) {
   color: var(--accent);
 }
 
+.empty-items {
+  padding: 14px 16px;
+  color: var(--text-soft);
+  border-radius: 12px;
+  border: 1px dashed var(--border-color);
+}
+
 .btn-icon {
   background: transparent;
   border: none;
@@ -563,5 +997,53 @@ function normalize(value) {
 .right { text-align: right; }
 .bold { font-weight: 700; }
 .accent-text { color: var(--accent); }
-.hide-on-print { }
+</style>
+
+<style>
+.autocomplete-menu {
+  position: fixed;
+  z-index: 20000;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+}
+
+.autocomplete-option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-main);
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.autocomplete-option:hover,
+.autocomplete-option.highlighted {
+  background: var(--bg-hover);
+}
+
+.autocomplete-option-title {
+  white-space: normal;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.autocomplete-option-meta {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.autocomplete-empty {
+  padding: 12px;
+  color: var(--text-soft);
+}
 </style>

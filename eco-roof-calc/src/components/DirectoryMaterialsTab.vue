@@ -6,17 +6,6 @@
       <form @submit.prevent="dir.addMaterial" class="form-vertical">
         <div class="row-basic">
           <div class="input-group">
-            <label class="ui-label">Главная категория *</label>
-            <input
-              v-model="dir.newMaterial.главная_категория"
-              type="text"
-              placeholder="Например: Комплектация"
-              required
-              class="ui-input"
-            />
-          </div>
-
-          <div class="input-group">
             <label class="ui-label">Подкатегория</label>
             <input
               v-model="dir.newMaterial.подкатегория"
@@ -27,22 +16,11 @@
           </div>
 
           <div class="input-group">
-            <label class="ui-label">Базовое наименование</label>
+            <label class="ui-label">Базовое наименование *</label>
             <input
               v-model="dir.newMaterial.базовое_наименование"
               type="text"
               placeholder="Например: ПВХ-мембрана"
-              class="ui-input"
-            />
-          </div>
-        </div>
-
-        <div class="row-basic">
-          <div class="input-group name-group">
-            <label class="ui-label">Полное наименование материала *</label>
-            <input
-              v-model="dir.newMaterial.полное_наименование_материала"
-              type="text"
               required
               class="ui-input"
             />
@@ -66,50 +44,6 @@
               v-model.number="dir.newMaterial.базовая_цена"
               type="number"
               step="0.01"
-              class="ui-input"
-            />
-          </div>
-        </div>
-
-        <div class="row-basic">
-          <div class="input-group">
-            <label class="ui-label">Бренд</label>
-            <input
-              v-model="dir.newMaterial.бренд"
-              type="text"
-              placeholder="Например: ТехноНИКОЛЬ"
-              class="ui-input"
-            />
-          </div>
-
-          <div class="input-group">
-            <label class="ui-label">Модель</label>
-            <input
-              v-model="dir.newMaterial.модель"
-              type="text"
-              placeholder="Например: LOGICROOF"
-              class="ui-input"
-            />
-          </div>
-
-          <div class="input-group">
-            <label class="ui-label">Тип материала</label>
-            <input
-              v-model="dir.newMaterial.тип_материала"
-              type="text"
-              placeholder="Например: ПВХ-мембрана"
-              class="ui-input"
-            />
-          </div>
-        </div>
-
-        <div class="row-basic">
-          <div class="input-group link-group">
-            <label class="ui-label">Ссылка на сайт (URL)</label>
-            <input
-              v-model="dir.newMaterial.ссылка"
-              type="url"
-              placeholder="https://..."
               class="ui-input"
             />
           </div>
@@ -211,6 +145,22 @@
             <input type="checkbox" v-model="dir.onlyFavMaterials" />
             <span>⭐ Только избранное</span>
           </label>
+
+          <div class="catalog-actions">
+            <button class="ui-btn ui-btn-primary" type="button" @click="exportMaterials">
+              Выгрузить XLSX
+            </button>
+            <button class="ui-btn ui-btn-secondary" type="button" @click="openImportDialog">
+              Загрузить цены XLSX
+            </button>
+            <input
+              ref="materialImportInput"
+              type="file"
+              accept=".xlsx"
+              class="hidden-file-input"
+              @change="handleImportFile"
+            />
+          </div>
         </div>
 
         <input
@@ -251,7 +201,9 @@
                 <div class="resizer" @mousedown.stop="startResize($event, 'variants')"></div>
               </th>
 
-              <th :style="{ width: matColWidths.actions + 'px', minWidth: matColWidths.actions + 'px' }"></th>
+              <th class="actions-head" :style="{ width: matColWidths.actions + 'px', minWidth: matColWidths.actions + 'px' }">
+                Действия
+              </th>
             </tr>
           </thead>
 
@@ -270,7 +222,6 @@
               <td>
                 <input
                   v-model="mat.подкатегория"
-                  @change="dir.updateMaterial(mat)"
                   class="cell-input"
                 />
               </td>
@@ -278,7 +229,6 @@
               <td>
                 <input
                   v-model="mat.полное_наименование_материала"
-                  @change="dir.updateMaterial(mat)"
                   class="cell-input text-left"
                 />
               </td>
@@ -286,7 +236,6 @@
               <td class="center">
                 <input
                   v-model="mat.единица_измерения"
-                  @change="dir.updateMaterial(mat)"
                   class="cell-input center"
                 />
               </td>
@@ -295,7 +244,6 @@
                 <input
                   type="number"
                   v-model.number="mat.базовая_цена"
-                  @change="dir.updateMaterial(mat)"
                   class="cell-input right bold"
                   step="0.01"
                 />
@@ -311,14 +259,22 @@
                 </button>
               </td>
 
-              <td class="center">
+              <td class="center row-actions">
+                <button
+                  @click="dir.updateMaterial(mat)"
+                  class="btn-save"
+                  title="Сохранить строку"
+                  type="button"
+                >
+                  Сохр.
+                </button>
                 <button
                   @click="dir.deleteMaterial(mat.идентификатор)"
                   class="btn-delete"
                   title="Удалить"
                   type="button"
                 >
-                  🗑️
+                  Удалить
                 </button>
               </td>
             </tr>
@@ -378,7 +334,6 @@
                 <td>
                   <input
                     v-model="variant.variant_label"
-                    @change="dir.updateVariant(selectedMaterial, variant)"
                     class="cell-input"
                   />
                 </td>
@@ -386,7 +341,6 @@
                 <td>
                   <input
                     v-model="variant.sku"
-                    @change="dir.updateVariant(selectedMaterial, variant)"
                     class="cell-input article"
                   />
                 </td>
@@ -394,7 +348,6 @@
                 <td>
                   <input
                     v-model.number="variant.thickness_mm"
-                    @change="dir.updateVariant(selectedMaterial, variant)"
                     type="number"
                     step="0.01"
                     class="cell-input right"
@@ -404,7 +357,6 @@
                 <td>
                   <input
                     v-model.number="variant.width_mm"
-                    @change="dir.updateVariant(selectedMaterial, variant)"
                     type="number"
                     step="0.01"
                     class="cell-input right"
@@ -414,7 +366,6 @@
                 <td>
                   <input
                     v-model.number="variant.height_mm"
-                    @change="dir.updateVariant(selectedMaterial, variant)"
                     type="number"
                     step="0.01"
                     class="cell-input right"
@@ -424,7 +375,6 @@
                 <td>
                   <input
                     v-model.number="variant.density"
-                    @change="dir.updateVariant(selectedMaterial, variant)"
                     type="number"
                     step="0.01"
                     class="cell-input right"
@@ -434,7 +384,6 @@
                 <td>
                   <input
                     v-model="variant.profile_name"
-                    @change="dir.updateVariant(selectedMaterial, variant)"
                     class="cell-input"
                   />
                 </td>
@@ -442,20 +391,27 @@
                 <td>
                   <input
                     v-model.number="variant.price"
-                    @change="dir.updateVariant(selectedMaterial, variant)"
                     type="number"
                     step="0.01"
                     class="cell-input right bold"
                   />
                 </td>
 
-                <td class="center">
+                <td class="center row-actions">
+                  <button
+                    @click="dir.updateVariant(selectedMaterial, variant)"
+                    class="btn-save"
+                    title="Сохранить вариант"
+                    type="button"
+                  >
+                    Сохр.
+                  </button>
                   <button
                     @click="dir.deleteVariant(selectedMaterial, variant.id)"
                     class="btn-delete"
                     type="button"
                   >
-                    🗑️
+                    Удалить
                   </button>
                 </td>
               </tr>
@@ -563,6 +519,7 @@ const props = defineProps({
 const dir = props.dir
 
 const selectedMaterial = ref(null)
+const materialImportInput = ref(null)
 
 const variantDraft = computed(() => {
   if (!selectedMaterial.value) return null
@@ -634,13 +591,42 @@ function closeVariantsModal() {
   selectedMaterial.value = null
 }
 
+async function exportMaterials() {
+  try {
+    const savedPath = await dir.exportMaterialsXlsx()
+    if (savedPath) {
+      window.alert(`Материалы выгружены: ${savedPath}`)
+    }
+  } catch {
+    window.alert('Не удалось выгрузить материалы в XLSX.')
+  }
+}
+
+function openImportDialog() {
+  materialImportInput.value?.click()
+}
+
+async function handleImportFile(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  try {
+    const count = await dir.importMaterialsXlsx(file)
+    window.alert(`Загружено/обновлено материалов: ${count}`)
+  } catch {
+    window.alert('Не удалось загрузить материалы из XLSX.')
+  } finally {
+    event.target.value = ''
+  }
+}
+
 const matColWidths = reactive({
   subcategory: 240,
   name: 620,
   unit: 90,
   price: 130,
   variants: 160,
-  actions: 60
+  actions: 150
 })
 
 let isResizing = false
@@ -712,16 +698,8 @@ function onMouseUp() {
   flex: 1;
 }
 
-.name-group {
-  flex: 3;
-}
-
 .short-input {
   flex: 1;
-}
-
-.link-group {
-  flex: 3;
 }
 
 .button-group {
@@ -776,6 +754,16 @@ function onMouseUp() {
   flex-wrap: wrap;
 }
 
+.catalog-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
 .fav-filter {
   display: flex;
   align-items: center;
@@ -801,8 +789,13 @@ function onMouseUp() {
 }
 
 .table-scroll {
-  overflow-x: auto;
+  overflow: auto;
   max-height: 75vh;
+  padding-bottom: 12px;
+  scrollbar-gutter: stable both-edges;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-card);
 }
 
 .resizable-table {
@@ -837,13 +830,16 @@ function onMouseUp() {
   font-size: 0.9rem;
   color: var(--text-main);
   background: var(--bg-card);
+  min-height: 42px;
+  vertical-align: middle;
 }
 
 .cell-input {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  padding: 0.65rem;
+  min-height: 42px;
+  padding: 0.7rem 0.75rem;
   border: 1px solid transparent;
   background: transparent;
   font-family: inherit;
@@ -887,18 +883,48 @@ function onMouseUp() {
   background: var(--accent-soft);
 }
 
+.row-actions {
+  padding: 6px !important;
+  white-space: nowrap;
+}
+
+.actions-head {
+  white-space: nowrap;
+}
+
+.btn-save,
 .btn-delete {
-  background: none;
-  border: none;
-  font-size: 1.15rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  font-weight: 800;
   cursor: pointer;
-  opacity: 0.75;
-  color: var(--text-soft);
+}
+
+.row-actions .btn-save {
+  margin-right: 6px;
+}
+
+.btn-delete {
+  background: color-mix(in srgb, var(--danger) 8%, var(--bg-card));
+  color: var(--danger);
   transition: transform var(--transition-fast), opacity var(--transition-fast), color var(--transition-fast);
 }
 
+.btn-save {
+  background: color-mix(in srgb, var(--success) 10%, var(--bg-card));
+  color: var(--success);
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.btn-save:hover {
+  border-color: var(--success);
+  transform: scale(1.12);
+}
+
 .btn-delete:hover {
-  opacity: 1;
+  border-color: var(--danger);
   color: var(--danger);
   transform: scale(1.12);
 }
@@ -1093,8 +1119,6 @@ input[type='number'] {
   }
 
   .button-group,
-  .link-group,
-  .name-group,
   .short-input {
     flex: none;
   }

@@ -41,7 +41,10 @@ async function exportXlsx() {
   }
 
   try {
-    await exportSmartPirReportXlsx(reportPayload.value)
+    const savedPath = await exportSmartPirReportXlsx(reportPayload.value)
+    if (savedPath) {
+      window.alert(`XLSX выгружен: ${savedPath}`)
+    }
   } catch (error) {
     console.error(error)
     window.alert('Не удалось экспортировать XLSX-отчёт.')

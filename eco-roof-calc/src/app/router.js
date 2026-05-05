@@ -10,7 +10,8 @@ import SmartPirReportPage from '@/pages/SmartPirReportPage.vue'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', name: 'presets', component: PresetsPage },
+    { path: '/', redirect: '/systems' },
+    { path: '/systems', name: 'systems', component: PresetsPage },
     { path: '/calculator', name: 'calculator', component: CalculatorPage },
     { path: '/directories', name: 'directories', component: DirectoriesPage },
     { path: '/formulas', name: 'formulas', component: FormulasPage },

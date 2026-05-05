@@ -8,6 +8,7 @@ import {
   toLegacyMaterialRow,
   toLegacyWorkRow
 } from '@/core/adapters/viewAdapters'
+import { saveBinaryFile, XLSX_MIME } from '@/core/utils/binaryFileExport'
 
 const FAV_MATERIALS_KEY = 'eco_roof_fav_materials'
 const FAV_WORKS_KEY = 'eco_roof_fav_works'
@@ -159,16 +160,10 @@ function saveIds(key, ids) {
 
 function defaultMaterialForm() {
   return {
-    главная_категория: '',
     подкатегория: '',
     артикул_товара: '',
-    полное_наименование_материала: '',
     единица_измерения: 'м2',
     базовая_цена: 0,
-    ссылка: '',
-    бренд: '',
-    модель: '',
-    тип_материала: '',
     базовое_наименование: '',
 
     вариант: '',
@@ -213,6 +208,7 @@ function buildInitialVariantFromForm(form) {
   return {
     variant_label:
       `${form.вариант || ''}`.trim() ||
+      `${form.базовое_наименование || ''}`.trim() ||
       `${form.полное_наименование_материала || ''}`.trim(),
     sku: `${form.артикул_товара || ''}`.trim(),
     thickness_mm: form.толщина_мм ?? null,
@@ -226,6 +222,10 @@ function buildInitialVariantFromForm(form) {
     is_active: 1,
     extra_json: {}
   }
+}
+
+function getNewMaterialName(form) {
+  return `${form.базовое_наименование || ''}`.trim()
 }
 
 function normalizeSearch(value) {
@@ -253,6 +253,59 @@ function mergeArticleIntoNotes(existingNotes = '', article = '') {
   return [cleanArticle ? `${ARTICLE_PREFIX}${cleanArticle}` : '', cleanNotes]
     .filter(Boolean)
     .join('\n')
+}
+
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать файл'))
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+function cellToText(value) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'object') {
+    if (value.text) return `${value.text}`
+    if (value.richText) return value.richText.map((part) => part?.text || '').join('')
+    if (value.result !== undefined) return `${value.result}`
+    if (value.formula) return `${value.result ?? ''}`
+  }
+
+  return `${value}`.trim()
+}
+
+function cellToNumber(value) {
+  const normalized = cellToText(value)
+    .replace(/\s+/g, '')
+    .replace(',', '.')
+  const number = Number(normalized)
+  return Number.isFinite(number) ? number : 0
+}
+
+function normalizeHeader(value) {
+  return cellToText(value)
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-zа-я0-9]+/g, '')
+}
+
+function getHeaderMap(headerRow) {
+  const map = {}
+  headerRow.eachCell((cell, colNumber) => {
+    map[normalizeHeader(cell.value)] = colNumber
+  })
+  return map
+}
+
+function getCellByHeader(row, headerMap, aliases) {
+  for (const alias of aliases) {
+    const index = headerMap[normalizeHeader(alias)]
+    if (index) return row.getCell(index).value
+  }
+
+  return ''
 }
 
 function buildPriceTiersFromLegacyWork(work) {
@@ -497,21 +550,20 @@ export function useDirectories() {
 
     try {
       const initialVariant = buildInitialVariantFromForm(newMaterial.value)
+      const materialName = getNewMaterialName(newMaterial.value)
+      const subcategory = `${newMaterial.value.подкатегория || ''}`.trim()
 
       await saveMaterialAction({
-        category: newMaterial.value.главная_категория || '',
-        subcategory: newMaterial.value.подкатегория || '',
-        base_name:
-          newMaterial.value.базовое_наименование ||
-          newMaterial.value.полное_наименование_материала ||
-          '',
-        display_name: newMaterial.value.полное_наименование_материала || '',
-        brand: newMaterial.value.бренд || '',
-        model: newMaterial.value.модель || '',
-        material_type: newMaterial.value.тип_материала || '',
+        category: subcategory,
+        subcategory,
+        base_name: materialName,
+        display_name: materialName,
+        brand: '',
+        model: '',
+        material_type: '',
         unit: newMaterial.value.единица_измерения || '',
         base_price: Number(newMaterial.value.базовая_цена || 0),
-        source_url: newMaterial.value.ссылка || '',
+        source_url: '',
         notes: '',
         variants: initialVariant ? [initialVariant] : []
       })
@@ -537,6 +589,198 @@ export function useDirectories() {
     } catch (err) {
       console.error(err)
       error.value = err?.message || 'Не удалось обновить материал'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function exportMaterialsXlsx() {
+    loading.value = true
+    error.value = ''
+
+    try {
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const worksheet = workbook.addWorksheet('Материалы')
+
+      worksheet.columns = [
+        { header: 'Подкатегория', key: 'subcategory', width: 28 },
+        { header: 'Наименование', key: 'name', width: 58 },
+        { header: 'Ед. изм.', key: 'unit', width: 12 },
+        { header: 'Базовая цена', key: 'basePrice', width: 16 },
+        { header: 'Вариант', key: 'variant', width: 30 },
+        { header: 'Артикул', key: 'sku', width: 22 },
+        { header: 'Толщина, мм', key: 'thickness', width: 14 },
+        { header: 'Ширина, мм', key: 'width', width: 14 },
+        { header: 'Высота, мм', key: 'height', width: 14 },
+        { header: 'Плотность', key: 'density', width: 14 },
+        { header: 'Профиль', key: 'profile', width: 24 },
+        { header: 'Цена варианта', key: 'variantPrice', width: 16 }
+      ]
+
+      worksheet.getRow(1).font = { bold: true }
+      worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+
+      for (const material of materialsDb.value || []) {
+        const variants = Array.isArray(material.варианты) && material.варианты.length
+          ? material.варианты
+          : [null]
+
+        for (const variant of variants) {
+          worksheet.addRow({
+            subcategory: material.подкатегория || '',
+            name: material.полное_наименование_материала || material.базовое_наименование || '',
+            unit: material.единица_измерения || '',
+            basePrice: Number(material.базовая_цена || 0),
+            variant: variant?.variant_label || '',
+            sku: variant?.sku || '',
+            thickness: variant?.thickness_mm ?? '',
+            width: variant?.width_mm ?? '',
+            height: variant?.height_mm ?? '',
+            density: variant?.density ?? '',
+            profile: variant?.profile_name || '',
+            variantPrice: variant ? Number(variant.price || 0) : ''
+          })
+        }
+      }
+
+      worksheet.eachRow((row) => {
+        row.eachCell((cell) => {
+          cell.alignment = { vertical: 'middle', wrapText: true }
+        })
+      })
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      return saveBinaryFile({
+        bytes: buffer,
+        fileName: 'Справочник материалов.xlsx',
+        mimeType: XLSX_MIME
+      })
+    } catch (err) {
+      console.error(err)
+      error.value = err?.message || 'Не удалось выгрузить материалы в XLSX'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function importMaterialsXlsx(file) {
+    if (!file) return 0
+
+    loading.value = true
+    error.value = ''
+
+    try {
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const buffer = await readFileAsArrayBuffer(file)
+      await workbook.xlsx.load(buffer)
+
+      const worksheet = workbook.worksheets[0]
+      if (!worksheet) {
+        throw new Error('В XLSX не найден лист с материалами')
+      }
+
+      const headerMap = getHeaderMap(worksheet.getRow(1))
+      const groups = new Map()
+
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return
+
+        const name = cellToText(getCellByHeader(row, headerMap, ['Наименование', 'Название']))
+        if (!name) return
+
+        const subcategory = cellToText(getCellByHeader(row, headerMap, ['Подкатегория', 'Категория']))
+        const key = `${normalizeSearch(subcategory)}|${normalizeSearch(name)}`
+
+        if (!groups.has(key)) {
+          const basePriceCell = getCellByHeader(row, headerMap, ['Базовая цена', 'Баз. цена'])
+          const basePriceText = cellToText(basePriceCell)
+
+          groups.set(key, {
+            subcategory,
+            name,
+            unit: cellToText(getCellByHeader(row, headerMap, ['Ед. изм.', 'Ед', 'Единица'])),
+            basePrice: basePriceText ? cellToNumber(basePriceCell) : null,
+            variants: []
+          })
+        }
+
+        const group = groups.get(key)
+        const variantLabel = cellToText(getCellByHeader(row, headerMap, ['Вариант', 'Название варианта']))
+        const sku = cellToText(getCellByHeader(row, headerMap, ['Артикул', 'SKU']))
+        const profile = cellToText(getCellByHeader(row, headerMap, ['Профиль']))
+        const hasVariant =
+          variantLabel ||
+          sku ||
+          profile ||
+          cellToText(getCellByHeader(row, headerMap, ['Толщина, мм'])) ||
+          cellToText(getCellByHeader(row, headerMap, ['Ширина, мм'])) ||
+          cellToText(getCellByHeader(row, headerMap, ['Высота, мм']))
+
+        if (hasVariant) {
+          group.variants.push({
+            variant_label: variantLabel || profile || name,
+            sku,
+            thickness_mm: cellToNumber(getCellByHeader(row, headerMap, ['Толщина, мм'])) || null,
+            width_mm: cellToNumber(getCellByHeader(row, headerMap, ['Ширина, мм'])) || null,
+            height_mm: cellToNumber(getCellByHeader(row, headerMap, ['Высота, мм'])) || null,
+            density: cellToNumber(getCellByHeader(row, headerMap, ['Плотность'])) || null,
+            profile_name: profile,
+            price: cellToNumber(getCellByHeader(row, headerMap, ['Цена варианта', 'Цена'])),
+            variant_type: profile ? 'profile' : 'option',
+            is_default: group.variants.length === 0 ? 1 : 0,
+            is_active: 1,
+            extra_json: {}
+          })
+        }
+      })
+
+      for (const group of groups.values()) {
+        const existing = materialsDb.value.find((material) => {
+          return normalizeSearch(material.полное_наименование_материала) === normalizeSearch(group.name) &&
+            normalizeSearch(material.подкатегория) === normalizeSearch(group.subcategory)
+        })
+
+        const payload = existing
+          ? materialRowToPayload(existing)
+          : {
+              id: null,
+              category: group.subcategory || '',
+              subcategory: group.subcategory || '',
+              base_name: group.name,
+              display_name: group.name,
+              brand: '',
+              model: '',
+              material_type: '',
+              unit: group.unit || 'м2',
+              base_price: Number(group.basePrice || 0),
+              source_url: '',
+              notes: '',
+              variants: []
+            }
+
+        payload.category = group.subcategory || payload.category || ''
+        payload.subcategory = group.subcategory || payload.subcategory || ''
+        payload.base_name = group.name
+        payload.display_name = group.name
+        payload.unit = group.unit || payload.unit || 'м2'
+        payload.base_price = group.basePrice === null ? Number(payload.base_price || 0) : Number(group.basePrice || 0)
+
+        if (group.variants.length || !existing) {
+          payload.variants = group.variants
+        }
+
+        await saveMaterialAction(payload)
+      }
+
+      await loadData()
+      return groups.size
+    } catch (err) {
+      console.error(err)
+      error.value = err?.message || 'Не удалось загрузить материалы из XLSX'
       throw err
     } finally {
       loading.value = false
@@ -701,6 +945,8 @@ export function useDirectories() {
     updateMaterial,
     deleteMaterial,
     toggleFavMaterial,
+    exportMaterialsXlsx,
+    importMaterialsXlsx,
 
     addWork,
     updateWork,

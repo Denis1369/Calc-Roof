@@ -180,7 +180,6 @@
                 <td>
                   <input
                     v-model="work.наименование_работы"
-                    @change="dir.updateWork(work)"
                     class="cell-input text-left work-name"
                   />
                 </td>
@@ -188,7 +187,6 @@
                 <td class="center">
                   <input
                     v-model="work.единица_измерения_работы"
-                    @change="dir.updateWork(work)"
                     class="cell-input center"
                   />
                 </td>
@@ -197,7 +195,6 @@
                   <input
                     type="number"
                     v-model.number="work.цена_0_300"
-                    @change="dir.updateWork(work)"
                     class="cell-input right"
                     step="0.01"
                   />
@@ -207,7 +204,6 @@
                   <input
                     type="number"
                     v-model.number="work.цена_300_600"
-                    @change="dir.updateWork(work)"
                     class="cell-input right"
                     step="0.01"
                   />
@@ -217,7 +213,6 @@
                   <input
                     type="number"
                     v-model.number="work.цена_600_1000"
-                    @change="dir.updateWork(work)"
                     class="cell-input right"
                     step="0.01"
                   />
@@ -227,7 +222,6 @@
                   <input
                     type="number"
                     v-model.number="work.цена_1000_3000"
-                    @change="dir.updateWork(work)"
                     class="cell-input right"
                     step="0.01"
                   />
@@ -237,7 +231,6 @@
                   <input
                     type="number"
                     v-model.number="work.цена_3000_6000"
-                    @change="dir.updateWork(work)"
                     class="cell-input right"
                     step="0.01"
                   />
@@ -247,7 +240,6 @@
                   <input
                     type="number"
                     v-model.number="work.цена_6000_15000"
-                    @change="dir.updateWork(work)"
                     class="cell-input right"
                     step="0.01"
                   />
@@ -257,7 +249,6 @@
                   <input
                     type="number"
                     v-model.number="work.цена_15000_30000"
-                    @change="dir.updateWork(work)"
                     class="cell-input right"
                     step="0.01"
                   />
@@ -267,13 +258,13 @@
                   <input
                     type="number"
                     v-model.number="work.цена_более_30000"
-                    @change="dir.updateWork(work)"
                     class="cell-input right"
                     step="0.01"
                   />
                 </td>
 
                 <td class="center">
+                  <button @click="dir.updateWork(work)" class="btn-save" title="Сохранить строку">💾</button>
                   <button @click="dir.deleteWork(work.идентификатор)" class="btn-delete" title="Удалить">🗑️</button>
                 </td>
               </tr>
@@ -307,7 +298,7 @@ const workColWidths = reactive({
   p6: 90,
   p7: 90,
   p8: 90,
-  actions: 60
+  actions: 90
 })
 
 let isResizing = false
@@ -469,8 +460,10 @@ function onMouseUp() {
 }
 
 .table-scroll {
-  overflow-x: auto;
+  overflow: auto;
   max-height: 75vh;
+  padding-bottom: 12px;
+  scrollbar-gutter: stable both-edges;
 }
 
 .resizable-table {
@@ -591,6 +584,21 @@ function onMouseUp() {
   opacity: 0.75;
   color: var(--text-soft);
   transition: transform var(--transition-fast), opacity var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-save {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  opacity: 0.8;
+  color: var(--success);
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.btn-save:hover {
+  opacity: 1;
+  transform: scale(1.12);
 }
 
 .btn-delete:hover {

@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { evaluate } from 'mathjs'
 
 import { getCatalogData } from '@/core/services/dataApi'
+import { saveWork as saveWorkAction } from '@/core/services/dataApi'
 import { saveEstimate as saveEstimateAction } from '@/core/services/dataApi'
 import { loadEstimate as loadEstimateAction } from '@/core/services/dataApi'
 import { listSavedEstimates } from '@/core/services/dataApi'
@@ -20,6 +21,18 @@ import {
 } from '@/core/adapters/viewAdapters'
 import { createSmartPirReportSession } from '@/core/report/smartPirReport'
 import { exportSmartPirReportXlsx } from '@/core/report/smartPirReportXlsx'
+import { DEFAULT_CONTRACTOR_PROFILE_ID } from '@/core/report/contractorProfiles'
+import { saveBinaryFile } from '@/core/utils/binaryFileExport'
+
+const PROJECT_FILE_MIME = 'application/json'
+const PROJECT_FILE_EXTENSION = 'roofcalc'
+const DEFAULT_OVERHEAD_EXPENSES = [
+  { name: 'Вывоз мусора', unit: 'рейс', qty: 1, price: 12800 },
+  { name: 'Кран', unit: 'смена', qty: 1, price: 44000 },
+  { name: 'Манипулятор', unit: 'смена', qty: 1, price: 28000 },
+  { name: 'Организационные и транспортные расходы', unit: 'ед', qty: 1, price: 564000 },
+  { name: 'Утилизация и вывоз мусора', unit: 'ед', qty: 1, price: 15000 }
+]
 
 function uuid() {
   return crypto.randomUUID()
@@ -27,6 +40,15 @@ function uuid() {
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
+}
+
+function sanitizeProjectFileName(value) {
+  const prepared = `${value || 'Новый проект'}`
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return prepared || 'Новый проект'
 }
 
 function toNumber(value, fallback = 0) {
@@ -41,12 +63,95 @@ function normalize(value) {
     .trim()
 }
 
+function equalsNormalized(left, right) {
+  return normalize(left) === normalize(right)
+}
+
 function round3(value) {
   return Math.round(toNumber(value) * 1000) / 1000
 }
 
 function round2(value) {
   return Math.round(toNumber(value) * 100) / 100
+}
+
+const EXTRA_SCOPE_PARAMS = [
+  ['SB', ['concrete_area']],
+  ['PS', ['parapet_perimeter_sandwich']],
+  ['PB', ['parapet_perimeter_concrete']],
+  ['CS', ['cornice_length']],
+  ['K', ['counter_slope_area']],
+  ['ODL', ['outer_drain_length']],
+  ['IC', ['anti_icing_cable_length']],
+  ['WL', ['walkways_length']],
+  ['WPC', ['walkways_count']],
+  ['D', ['deformation_joint_length']],
+  ['FW', ['fachwerk_count']],
+  ['SH', ['smoke_hatches_count', 'smoke_hatch_count']],
+  ['NG', ['noncombustible_fill_area', 'fire_break_area']],
+  ['OV', ['ov_count']],
+  ['VK', ['vk_count']],
+  ['VKL', ['vk_length']],
+  ['PDL', ['pedestal_perimeter']],
+  ['PDC', ['pedestal_count']],
+  ['AI', ['air_intake_count']],
+  ['VF', ['fan_count']],
+  ['EX', ['exhaust_count']],
+  ['AC', ['condenser_support_count', 'ac_stand_count']],
+  ['CG', ['cable_gooseneck_count']],
+  ['PT', ['pass_through_count', 'pass_general_count']],
+  ['PTS', ['pass_through_small_count', 'pass_small_count']],
+  ['PTM', ['pass_through_medium_count', 'pass_medium_count']],
+  ['VS', ['vent_shaft_perimeter']],
+  ['GR', ['guardrail_length']],
+  ['GRC', ['guardrail_post_count']],
+  ['SC', ['screed_area']],
+  ['PA', ['primer_area']],
+  ['WZA', ['wind_zone_area']],
+  ['RB', ['base_profile_rib_fill_length', 'corrugation_fill_length']],
+  ['LP', ['l_profile_length']],
+  ['RU', ['ridge_reinforcement_length']],
+  ['DFP', ['def_joint_profile_length']],
+  ['CF', ['corrugation_fill_length', 'base_profile_rib_fill_length']],
+  ['DR', ['inner_drain_reinforcement_count', 'inner_drains_count']]
+]
+
+function resolveParamValue(paramValues, keys = [], fallback = 0) {
+  for (const key of keys) {
+    const value = toNumber(paramValues?.[key], NaN)
+    if (Number.isFinite(value)) return value
+  }
+
+  return fallback
+}
+
+function isDrainIdentity(identity = '') {
+  return (
+    identity.includes('ворон') ||
+    identity.includes('водоприем') ||
+    identity.includes('водоприём') ||
+    identity.includes('водоотвед') ||
+    identity.includes('водосточ') ||
+    identity.includes('drain')
+  )
+}
+
+function isOuterDrainIdentity(identity = '') {
+  return isDrainIdentity(identity) && (
+    identity.includes('наруж') ||
+    identity.includes('внеш') ||
+    identity.includes('парапет') ||
+    identity.includes('outer')
+  )
+}
+
+function isCounterSlopeIdentity(identity = '') {
+  return (
+    identity.includes('контруклон') ||
+    identity.includes('уклонообраз') ||
+    identity.includes('разуклон') ||
+    identity.includes('slope')
+  )
 }
 
 function createEmptyWork() {
@@ -66,7 +171,7 @@ function createEmptyWork() {
   }
 }
 
-function createEmptyMaterial(supplier = 'ТехноНИКОЛЬ') {
+function createEmptyMaterial() {
   return {
     id: uuid(),
     code: '',
@@ -74,7 +179,6 @@ function createEmptyMaterial(supplier = 'ТехноНИКОЛЬ') {
     templateCode: '',
     itemCode: '',
     name: '',
-    supplier,
     unit: 'м2',
     formulaName: '',
     expression: 'S',
@@ -97,7 +201,6 @@ function createEmptyZone(name = 'Новый участок') {
   return {
     id: uuid(),
     name,
-    supplierType: 'ТехноНИКОЛЬ',
     roofParams: {
       area: 0,
       perimeter: 0,
@@ -118,6 +221,27 @@ function createEmptyExpense() {
     qty: 1,
     price: 0
   }
+}
+
+function createDefaultOverheadExpenses() {
+  return DEFAULT_OVERHEAD_EXPENSES.map((item) => ({
+    id: uuid(),
+    ...item
+  }))
+}
+
+function resetMaterialLookup(row) {
+  row.itemCode = ''
+  row.material_id = null
+  row.base_name = ''
+  row.variant_id = null
+  row.variant_label = ''
+  row.selectedVariantId = null
+  row.selectedProfileVariantId = null
+  row.profile_name = ''
+  row.profileThickness = null
+  row.thickness = null
+  row.thickness_unit = ''
 }
 
 function toLegacyFormulaRow(formula) {
@@ -148,22 +272,43 @@ function normalizeWorkItem(item) {
     name: item?.name || '',
     unit: item?.unit || 'м2',
     formulaName: item?.formulaName || '',
-    expression: item?.expression || 'S',
+    manualQty: Boolean(item?.manualQty),
+    expression: normalizeCleanWorkExpression(item?.expression || 'S'),
     qty: toNumber(item?.qty, 0),
     price: toNumber(item?.price, 0),
     total: round2((toNumber(item?.qty, 0)) * (toNumber(item?.price, 0)))
   }
 }
 
-function normalizeMaterialItem(item, supplier = 'ТехноНИКОЛЬ') {
+function normalizeCleanWorkExpression(expression) {
+  const normalized = normalizeExpression(expression || 'S')
+  const compact = normalized.replace(/\s+/g, '').toUpperCase()
+
+  if (compact === 'S+(P*0.15)' || compact === 'S+P*0.15' || compact === 'S+(P*0.2)' || compact === 'S+P*0.2') {
+    return 'S'
+  }
+
+  return normalized
+}
+
+function normalizeMaterialItem(item) {
   return {
     id: item?.id || uuid(),
     code: item?.code || '',
     cellCode: item?.cellCode || '',
     templateCode: item?.templateCode || '',
     itemCode: item?.itemCode || '',
+    material_id: item?.material_id ?? null,
+    base_name: item?.base_name || '',
+    variant_id: item?.variant_id ?? null,
+    variant_label: item?.variant_label || '',
+    selectedVariantId: item?.selectedVariantId ?? null,
+    selectedProfileVariantId: item?.selectedProfileVariantId ?? null,
+    profile_name: item?.profile_name || '',
+    profileThickness: item?.profileThickness ?? null,
+    thickness: item?.thickness ?? null,
+    thickness_unit: item?.thickness_unit || '',
     name: item?.name || '',
-    supplier: item?.supplier || supplier,
     unit: item?.unit || 'м2',
     formulaName: item?.formulaName || '',
     expression: item?.expression || 'S',
@@ -173,24 +318,19 @@ function normalizeMaterialItem(item, supplier = 'ТехноНИКОЛЬ') {
   }
 }
 
-function normalizeSection(section, zoneSupplier = 'ТехноНИКОЛЬ') {
+function normalizeSection(section) {
   return {
     id: section?.id || uuid(),
     title: section?.title || 'Раздел',
     works: Array.isArray(section?.works) ? section.works.map(normalizeWorkItem) : [],
-    materials: Array.isArray(section?.materials)
-      ? section.materials.map((item) => normalizeMaterialItem(item, zoneSupplier))
-      : []
+    materials: Array.isArray(section?.materials) ? section.materials.map(normalizeMaterialItem) : []
   }
 }
 
 function normalizeZone(zone) {
-  const supplierType = zone?.supplierType || 'ТехноНИКОЛЬ'
-
   const normalized = {
     id: zone?.id || uuid(),
     name: zone?.name || 'Участок',
-    supplierType,
     roofParams: {
       area: toNumber(zone?.roofParams?.area, 0),
       perimeter: toNumber(zone?.roofParams?.perimeter, 0),
@@ -203,7 +343,7 @@ function normalizeZone(zone) {
       : [],
     templateMeta: zone?.templateMeta || null,
     sections: Array.isArray(zone?.sections) && zone.sections.length
-      ? zone.sections.map((section) => normalizeSection(section, supplierType))
+      ? zone.sections.map(normalizeSection)
       : [createEmptySection()]
   }
 
@@ -214,6 +354,7 @@ function normalizeZone(zone) {
 function normalizeEstimatePayload(payload) {
   return {
     projectName: payload?.projectName || 'Новый проект',
+    contractorProfile: payload?.contractorProfile || DEFAULT_CONTRACTOR_PROFILE_ID,
     vatRate: toNumber(payload?.vatRate, 22),
     estimateZones: Array.isArray(payload?.estimateZones) && payload.estimateZones.length
       ? payload.estimateZones.map(normalizeZone)
@@ -226,11 +367,12 @@ function normalizeEstimatePayload(payload) {
           qty: toNumber(item?.qty, 0),
           price: toNumber(item?.price, 0)
         }))
-      : []
+      : createDefaultOverheadExpenses()
   }
 }
 
 function buildScope(zone) {
+  const paramValues = zone?.templateMeta?.paramValues || {}
   const scope = {
     S: toNumber(zone?.roofParams?.area, 0),
     P: toNumber(zone?.roofParams?.perimeter, 0),
@@ -245,18 +387,36 @@ function buildScope(zone) {
     aerators_count: toNumber(zone?.roofParams?.aerators, 0)
   }
 
-  for (const [key, rawValue] of Object.entries(zone?.templateMeta?.paramValues || {})) {
+  for (const [key, rawValue] of Object.entries(paramValues)) {
     const number = Number(rawValue)
     if (Number.isFinite(number)) {
       scope[key] = number
     }
   }
 
+  for (const [symbol, keys] of EXTRA_SCOPE_PARAMS) {
+    scope[symbol] = resolveParamValue(paramValues, keys, toNumber(scope[symbol], 0))
+  }
+
+  scope.DR = resolveParamValue(paramValues, ['inner_drain_reinforcement_count'], scope.ID)
+
   for (const param of zone?.customParams || []) {
     const symbol = `${param?.symbol || ''}`.trim()
     if (!symbol) continue
     scope[symbol] = toNumber(param?.value, 0)
   }
+
+  scope.S = toNumber(zone?.roofParams?.area, 0)
+  scope.P = toNumber(zone?.roofParams?.perimeter, 0)
+  scope.PD = toNumber(zone?.roofParams?.parapetDrains, 0)
+  scope.OD = toNumber(zone?.roofParams?.parapetDrains, 0)
+  scope.ID = toNumber(zone?.roofParams?.innerDrains, 0)
+  scope.A = toNumber(zone?.roofParams?.aerators, 0)
+  scope.roof_area = scope.S
+  scope.parapet_perimeter = scope.P
+  scope.inner_drains_count = scope.ID
+  scope.outer_drains_count = scope.OD
+  scope.aerators_count = scope.A
 
   return scope
 }
@@ -291,13 +451,27 @@ function evaluateExpression(expression, zone, coefficientsDb, scope = null) {
   if (!expr) return 0
 
   const prepared = replaceCoefficients(expr, coefficientsDb)
+  const context = injectMissingCellRefs(prepared, scope || buildScope(zone))
 
   try {
-    const value = evaluate(prepared, scope || buildScope(zone))
+    const value = evaluate(prepared, context)
     return round3(value)
   } catch {
     return 0
   }
+}
+
+function injectMissingCellRefs(expression, scope = {}) {
+  const context = { ...(scope || {}) }
+  const refs = `${expression || ''}`.match(/\b[A-Z]+[1-9]\d*\b/g) || []
+
+  for (const ref of refs) {
+    if (!Object.prototype.hasOwnProperty.call(context, ref)) {
+      context[ref] = 0
+    }
+  }
+
+  return context
 }
 
 function getWorkPriceByArea(workRow, area) {
@@ -311,6 +485,61 @@ function getWorkPriceByArea(workRow, area) {
   if (value <= 15000) return toNumber(workRow?.цена_6000_15000, 0)
   if (value <= 30000) return toNumber(workRow?.цена_15000_30000, 0)
   return toNumber(workRow?.цена_более_30000, 0)
+}
+
+function inferWorkExpression(workRow, section = null) {
+  const name = normalize(workRow?.наименование_работы || '')
+  const unit = normalize(workRow?.единица_измерения_работы || '')
+  const sectionTitle = normalize(section?.title || '')
+  const identity = `${name} ${sectionTitle}`
+
+  if (identity.includes('аэратор')) return 'A'
+  if (isOuterDrainIdentity(identity)) return 'OD'
+  if (isDrainIdentity(identity)) return 'ID'
+  if (isCounterSlopeIdentity(identity)) return 'K'
+  if (identity.includes('l-образ') || identity.includes('l образ')) return 'LP'
+  if (identity.includes('профил') && (identity.includes('усилен') || identity.includes('ендов') || identity.includes('коньк'))) return 'RU'
+  if (identity.includes('гофр')) return 'CF'
+  if (identity.includes('пешеход') || identity.includes('дорож')) return 'WL'
+  if (identity.includes('деформац')) return 'D'
+  if (identity.includes('огражден')) return 'GR'
+  if (identity.includes('фахвер')) return 'FW'
+  if (identity.includes('дым')) return 'SH'
+  if (identity.includes('вентшах')) return 'VS'
+  if (identity.includes('проходк')) return 'PT'
+
+  if (
+    unit.includes('м/п') ||
+    unit.includes('п.м') ||
+    unit === 'м' ||
+    identity.includes('парапет') ||
+    identity.includes('примыкан') ||
+    identity.includes('планк')
+  ) {
+    return 'P'
+  }
+
+  if (unit.includes('шт')) return '1'
+  return 'S'
+}
+
+function isCountBasedWork(work, section = null) {
+  const identity = normalize(`${work?.name || work?.наименование_работы || ''} ${section?.title || ''}`)
+  return identity.includes('аэратор') || isDrainIdentity(identity)
+}
+
+function repairWorkExpressionIfNeeded(work, section = null) {
+  const expression = normalize(work?.expression)
+  if (!work || work.manualQty || !isCountBasedWork(work, section)) {
+    return
+  }
+
+  if (['', '0', '1', 's', 'area', 'шт', 'ед', 'м2', 'м²'].includes(expression)) {
+    work.expression = inferWorkExpression({
+      наименование_работы: work.name,
+      единица_измерения_работы: work.unit
+    }, section)
+  }
 }
 
 function resolveArrayItem(payload, items) {
@@ -370,10 +599,11 @@ function isReallyEmptyZone(zone) {
 
 export function useCalculator() {
   const projectName = ref('Новый проект')
+  const contractorProfile = ref(DEFAULT_CONTRACTOR_PROFILE_ID)
   const vatRate = ref(22)
 
   const estimateZones = ref([createEmptyZone()])
-  const overheadExpenses = ref([])
+  const overheadExpenses = ref(createDefaultOverheadExpenses())
 
   const worksDb = ref([])
   const materialsDb = ref([])
@@ -387,6 +617,11 @@ export function useCalculator() {
   const dropdownRef = ref(null)
 
   let clickOutsideHandler = null
+
+  function showActionError(message, error) {
+    console.error(error)
+    window.alert(message)
+  }
 
   async function loadDatabases() {
     const [catalogData, systems] = await Promise.all([
@@ -425,48 +660,44 @@ export function useCalculator() {
   }
 
   async function selectTemplate(templateId) {
-    const found = savedTemplatesDb.value.find(
-      (item) => Number(item.идентификатор) === Number(templateId)
-    )
-    if (!found) return
+    try {
+      const found = savedTemplatesDb.value.find(
+        (item) => Number(item.идентификатор) === Number(templateId)
+      )
+      if (!found) return
 
-    const fullSystemRaw = await getSystemTemplate(found.код || found.code)
-    const systemView = toSystemTemplateView(fullSystemRaw)
+      const fullSystemRaw = await getSystemTemplate(found.код || found.code)
+      const systemView = toSystemTemplateView(fullSystemRaw)
 
-    const selectedOptionKeys = (systemView?.опции || [])
-      .filter((item) => item.default)
-      .map((item) => item.key)
+      const selectedOptionKeys = (systemView?.опции || [])
+        .filter((item) => item.default)
+        .map((item) => item.key)
 
-    const paramValues = Object.fromEntries(
-      (systemView?.параметры || []).map((item) => [item.key, item.value])
-    )
+      const paramValues = Object.fromEntries(
+        (systemView?.параметры || []).map((item) => [item.key, item.value])
+      )
 
-    const built = await buildEstimateFromSystem(
-      systemView,
-      selectedOptionKeys,
-      paramValues
-    )
+      const built = await buildEstimateFromSystem(
+        systemView,
+        selectedOptionKeys,
+        paramValues
+      )
 
-    const incomingZones = normalizeEstimatePayload(built).estimateZones
+      const incomingZones = normalizeEstimatePayload(built).estimateZones
 
-    if (
-      estimateZones.value.length === 1 &&
-      isReallyEmptyZone(estimateZones.value[0])
-    ) {
-      estimateZones.value = incomingZones
-    } else {
-      estimateZones.value.push(...incomingZones)
-    }
-
-    isTemplateDropdownOpen.value = false
-    recalculateVolumes()
-  }
-
-  function applySupplierToZone(zone) {
-    for (const section of zone.sections || []) {
-      for (const material of section.materials || []) {
-        material.supplier = zone.supplierType || 'ТехноНИКОЛЬ'
+      if (
+        estimateZones.value.length === 1 &&
+        isReallyEmptyZone(estimateZones.value[0])
+      ) {
+        estimateZones.value = incomingZones
+      } else {
+        estimateZones.value.push(...incomingZones)
       }
+
+      isTemplateDropdownOpen.value = false
+      recalculateVolumes()
+    } catch (error) {
+      showActionError('Не удалось добавить готовую систему в смету.', error)
     }
   }
 
@@ -475,11 +706,64 @@ export function useCalculator() {
     if (!target) return null
 
     return (
-      worksDb.value.find((item) => normalize(item.наименование_работы) === target) ||
-      worksDb.value.find((item) => normalize(item.наименование_работы).includes(target)) ||
-      worksDb.value.find((item) => target.includes(normalize(item.наименование_работы))) ||
+      worksDb.value.find((item) => equalsNormalized(item.наименование_работы, target)) ||
       null
     )
+  }
+
+  function findWorkFromPayload(payload, fallbackName = '') {
+    const selected = payload?.selected || null
+    const selectedId = selected?.id || selected?.идентификатор || null
+    if (selectedId) {
+      const foundById = worksDb.value.find((item) => Number(item.идентификатор) === Number(selectedId))
+      if (foundById) return foundById
+    }
+
+    return findWorkByName(selected?.name || selected?.наименование_работы || fallbackName)
+  }
+
+  async function createCustomWorkInCatalog(row, section, zone) {
+    const name = `${row?.name || ''}`.trim()
+    if (!name) return null
+
+    const existing = findWorkByName(name)
+    if (existing) return existing
+
+    const price = toNumber(row?.price, 0)
+    const payload = {
+      category: section?.title || 'Пользовательские работы',
+      name,
+      unit: row?.unit || 'м2',
+      notes: 'Добавлено автоматически из инженерной сметы.',
+      price_tiers: [
+        { area_from: 0, area_to: 300, price },
+        { area_from: 300, area_to: 600, price },
+        { area_from: 600, area_to: 1000, price },
+        { area_from: 1000, area_to: 3000, price },
+        { area_from: 3000, area_to: 6000, price },
+        { area_from: 6000, area_to: 15000, price },
+        { area_from: 15000, area_to: 30000, price },
+        { area_from: 30000, area_to: null, price }
+      ]
+    }
+
+    try {
+      const created = await saveWorkAction(payload)
+      const legacy = toLegacyWorkRow(created)
+      const existsById = worksDb.value.some(
+        (item) => Number(item.идентификатор) === Number(legacy.идентификатор)
+      )
+
+      if (!existsById) {
+        worksDb.value.push(legacy)
+      }
+
+      return legacy
+    } catch (error) {
+      console.warn('Не удалось автоматически добавить работу в справочник.', error)
+      await loadDatabases()
+      return findWorkByName(name)
+    }
   }
 
   function findMaterialByName(name) {
@@ -487,11 +771,123 @@ export function useCalculator() {
     if (!target) return null
 
     return (
-      materialsDb.value.find((item) => normalize(item.полное_наименование_материала) === target) ||
-      materialsDb.value.find((item) => normalize(item.полное_наименование_материала).includes(target)) ||
-      materialsDb.value.find((item) => target.includes(normalize(item.полное_наименование_материала))) ||
+      materialsDb.value.find((item) => equalsNormalized(item.полное_наименование_материала, target)) ||
       null
     )
+  }
+
+  function findMaterialByPatterns(patterns = []) {
+    const normalizedPatterns = patterns.map(normalize).filter(Boolean)
+    if (!normalizedPatterns.length) return null
+
+    return materialsDb.value.find((item) => {
+      const title = normalize(`${item.полное_наименование_материала || ''} ${item.базовое_наименование || ''}`)
+      return normalizedPatterns.every((pattern) => title.includes(pattern))
+    }) || null
+  }
+
+  function createMaterialFromCatalog(material, { name = '', expression = '0', unit = '' } = {}) {
+    return {
+      ...createEmptyMaterial(),
+      itemCode: material?.артикул_товара || material?.идентификатор || '',
+      material_id: material?.идентификатор || null,
+      base_name: material?.базовое_наименование || name,
+      name: material?.полное_наименование_материала || name,
+      unit: material?.единица_измерения || unit || 'шт',
+      expression,
+      price: toNumber(material?.базовая_цена, 0)
+    }
+  }
+
+  function addMaterialByPatterns(section, zone, patterns, fallback) {
+    const material = findMaterialByPatterns(patterns)
+    const name = material?.полное_наименование_материала || fallback.name
+    const exists = (section.materials || []).some((item) => equalsNormalized(item.name, name))
+
+    if (exists) return
+
+    const item = createMaterialFromCatalog(material, {
+      name,
+      expression: fallback.expression,
+      unit: fallback.unit
+    })
+    item.code = nextExcelCellCodeForSections(zone?.sections || [section])
+    item.cellCode = item.code
+    section.materials.push(item)
+  }
+
+  function isProflistZone(zone) {
+    const metaText = normalize(`${zone?.templateMeta?.systemCode || ''} ${zone?.templateMeta?.paramValues?.base_profile || ''}`)
+    const sectionText = normalize((zone?.sections || []).map((section) => section.title).join(' '))
+    const materialText = normalize((zone?.sections || []).flatMap((section) => section.materials || []).map((item) => item.name).join(' '))
+    return metaText.includes('proflist') || metaText.includes('проф') || sectionText.includes('профлист') || materialText.includes('профлист')
+  }
+
+  function addCompanionMaterialsForWork(work, section, zone) {
+    const identity = normalize(`${work?.name || ''} ${section?.title || ''}`)
+
+    if (identity.includes('аэратор')) {
+      addMaterialByPatterns(section, zone, ['кровельный', 'аэратор'], {
+        name: 'Кровельный аэратор',
+        expression: 'A',
+        unit: 'шт'
+      })
+      return
+    }
+
+    if (isDrainIdentity(identity)) {
+      const isOuter = isOuterDrainIdentity(identity)
+      addMaterialByPatterns(
+        section,
+        zone,
+        isOuter ? ['парапетная', 'воронка'] : ['воронка', 'водосточная'],
+        {
+          name: isOuter ? 'Парапетная воронка 100*100 мм с листоуловителем' : 'Воронка водосточная ТехноНИКОЛЬ 110*720 с обогревом',
+          expression: isOuter ? 'OD' : 'ID',
+          unit: 'шт'
+        }
+      )
+
+      if (!isOuter && isProflistZone(zone)) {
+        addMaterialByPatterns(section, zone, ['оцинкованный', 'лист'], {
+          name: 'Оцинкованный лист, толщ. 0,7 мм, 600*600 мм',
+          expression: 'ID',
+          unit: 'шт'
+        })
+        addMaterialByPatterns(section, zone, ['ng'], {
+          name: 'NG',
+          expression: 'ID * 0.25',
+          unit: 'м2'
+        })
+      }
+      return
+    }
+
+    if (identity.includes('l-образ') || identity.includes('l образ')) {
+      addMaterialByPatterns(section, zone, ['l-образный', 'профиль'], {
+        name: 'L-образный профиль',
+        expression: work.expression || 'LP',
+        unit: 'м/п'
+      })
+      return
+    }
+
+    if (identity.includes('профил') && (identity.includes('усилен') || identity.includes('ендов') || identity.includes('коньк'))) {
+      addMaterialByPatterns(section, zone, ['профиль', 'усиления'], {
+        name: 'Профиль усиления (коньковые усиления, усиления ендов)',
+        expression: work.expression || 'RU',
+        unit: 'м/п'
+      })
+      return
+    }
+
+    if (identity.includes('гофр') && (identity.includes('нг') || identity.includes('негорюч'))) {
+      addMaterialByPatterns(section, zone, ['ng'], {
+        name: 'NG',
+        expression: work.expression ? `(${work.expression}) * 0.25` : 'CF * 0.25',
+        unit: 'м2'
+      })
+    }
   }
 
   function findFormulaByName(name) {
@@ -505,12 +901,14 @@ export function useCalculator() {
     )
   }
 
-  function onWorkNameChange(payload, section, zone) {
+  async function onWorkNameChange(payload, section, zone) {
     const row = resolveArrayItem(payload, section.works)
     if (!row) return
 
     const name = resolvePayloadValue(payload, row, ['name', 'workName', 'наименование_работы']) || row.name
-    const found = findWorkByName(name)
+    const previousItemCode = `${row.itemCode || ''}`
+    const found = findWorkFromPayload(payload, name)
+    const shouldUpdateExpression = Boolean(payload?.selected) || `${found?.идентификатор || ''}` !== previousItemCode
 
     row.name = name
 
@@ -519,6 +917,27 @@ export function useCalculator() {
       row.name = found.наименование_работы
       row.unit = found.единица_измерения_работы || row.unit
       row.price = getWorkPriceByArea(found, zone?.roofParams?.area)
+      if (shouldUpdateExpression) {
+        row.manualQty = false
+        row.expression = inferWorkExpression(found, section)
+      }
+      addCompanionMaterialsForWork(row, section, zone)
+    } else {
+      const created = await createCustomWorkInCatalog(row, section, zone)
+      row.itemCode = created?.идентификатор || ''
+      if (created) {
+        row.unit = created.единица_измерения_работы || row.unit
+        row.price = row.price || getWorkPriceByArea(created, zone?.roofParams?.area)
+      }
+
+      if (isCountBasedWork(row, section)) {
+        row.manualQty = false
+        row.expression = inferWorkExpression({
+          наименование_работы: row.name,
+          единица_измерения_работы: row.unit
+        }, section)
+        addCompanionMaterialsForWork(row, section, zone)
+      }
     }
 
     recalculateVolumes()
@@ -538,6 +957,8 @@ export function useCalculator() {
       row.name = found.полное_наименование_материала
       row.unit = found.единица_измерения || row.unit
       row.price = toNumber(found.базовая_цена, row.price)
+    } else {
+      resetMaterialLookup(row)
     }
 
     recalculateVolumes()
@@ -582,11 +1003,12 @@ export function useCalculator() {
   function recalculateVolumes() {
     for (const zone of estimateZones.value) {
       assignExcelCellCodesToSections(zone.sections || [])
-      applySupplierToZone(zone)
       const scope = buildScope(zone)
 
       for (const section of zone.sections || []) {
         for (const work of section.works || []) {
+          repairWorkExpressionIfNeeded(work, section)
+
           work.qty = evaluateExpression(
             work.expression,
             zone,
@@ -640,56 +1062,146 @@ export function useCalculator() {
   }
 
   async function saveProject() {
-    const payload = {
+    try {
+      const payload = {
+        projectName: projectName.value || 'Новый проект',
+        contractorProfile: contractorProfile.value || DEFAULT_CONTRACTOR_PROFILE_ID,
+        vatRate: toNumber(vatRate.value, 22),
+        estimateZones: clone(estimateZones.value),
+        overheadExpenses: clone(overheadExpenses.value)
+      }
+
+      const saved = await saveEstimateAction({
+        title: payload.projectName,
+        estimate: payload
+      })
+
+      if (saved?.id) {
+        window.alert(`Проект сохранён. ID: ${saved.id}`)
+      } else {
+        window.alert('Проект сохранён.')
+      }
+
+      return saved
+    } catch (error) {
+      showActionError('Не удалось сохранить проект.', error)
+      return null
+    }
+  }
+
+  async function getSavedProjects() {
+    savedProjectsInternal.value = await listSavedEstimates()
+    return clone(savedProjectsInternal.value)
+  }
+
+  async function loadProjectById(projectId) {
+    const loaded = await loadEstimateAction(Number(projectId))
+    if (!loaded?.estimate) {
+      throw new Error('Проект не найден.')
+    }
+
+    return restoreProjectPayload(loaded.estimate)
+  }
+
+  async function loadProject() {
+    try {
+      const projects = await getSavedProjects()
+
+      if (!projects.length) {
+        window.alert('Сохранённых проектов пока нет.')
+        return
+      }
+
+      const promptText = projects
+        .map((item, index) => `${index + 1}. ID ${item.id} — ${item.title || 'Без названия'}`)
+        .join('\n')
+
+      const chosenValue = window.prompt(
+        `Выберите сохранённый проект.\nВведите номер строки слева или ID проекта:\n\n${promptText}`
+      )
+      if (!chosenValue) return
+
+      const chosenNumber = Number(`${chosenValue}`.trim())
+      const byIndex = Number.isInteger(chosenNumber)
+        ? projects[chosenNumber - 1]
+        : null
+      const byId = projects.find((item) => Number(item.id) === chosenNumber)
+      const chosenProject = byIndex || byId
+
+      if (!chosenProject?.id) {
+        window.alert('Не нашёл такой проект. Введите номер из списка или ID.')
+        return
+      }
+
+      const normalized = await loadProjectById(chosenProject.id)
+      window.alert(`Загружен проект: ${normalized.projectName}`)
+    } catch (error) {
+      showActionError('Не удалось загрузить проект.', error)
+    }
+  }
+
+  function getCurrentEditableProjectPayload() {
+    recalculateVolumes()
+
+    return {
       projectName: projectName.value || 'Новый проект',
+      contractorProfile: contractorProfile.value || DEFAULT_CONTRACTOR_PROFILE_ID,
       vatRate: toNumber(vatRate.value, 22),
       estimateZones: clone(estimateZones.value),
       overheadExpenses: clone(overheadExpenses.value)
     }
-
-    const saved = await saveEstimateAction({
-      title: payload.projectName,
-      estimate: payload
-    })
-
-    if (saved?.id) {
-      window.alert(`Проект сохранён. ID: ${saved.id}`)
-    } else {
-      window.alert('Проект сохранён.')
-    }
-
-    return saved
   }
 
-  async function loadProject() {
-    savedProjectsInternal.value = await listSavedEstimates()
-
-    if (!savedProjectsInternal.value.length) {
-      window.alert('Сохранённых проектов пока нет.')
-      return
-    }
-
-    const promptText = savedProjectsInternal.value
-      .map((item) => `${item.id} — ${item.title || 'Без названия'}`)
-      .join('\n')
-
-    const chosenId = window.prompt(`Введите ID проекта для загрузки:\n\n${promptText}`)
-    if (!chosenId) return
-
-    const loaded = await loadEstimateAction(Number(chosenId))
-    if (!loaded?.estimate) {
-      window.alert('Проект не найден.')
-      return
-    }
-
-    const normalized = normalizeEstimatePayload(loaded.estimate)
+  function restoreProjectPayload(payload) {
+    const normalized = normalizeEstimatePayload(payload)
 
     projectName.value = normalized.projectName
+    contractorProfile.value = normalized.contractorProfile
     vatRate.value = normalized.vatRate
     estimateZones.value = normalized.estimateZones
     overheadExpenses.value = normalized.overheadExpenses
 
     recalculateVolumes()
+    return normalized
+  }
+
+  async function exportProjectFile() {
+    try {
+      const payload = {
+        app: 'RoofCalc',
+        fileType: 'editable-estimate',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        estimate: getCurrentEditableProjectPayload()
+      }
+
+      const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2))
+      const fileName = `${sanitizeProjectFileName(payload.estimate.projectName)}.${PROJECT_FILE_EXTENSION}`
+      const savedPath = await saveBinaryFile({
+        bytes,
+        fileName,
+        mimeType: PROJECT_FILE_MIME
+      })
+
+      return savedPath
+    } catch (error) {
+      showActionError('Не удалось сохранить расчёт файлом.', error)
+      return null
+    }
+  }
+
+  async function importProjectFile(file) {
+    try {
+      if (!file) return null
+
+      const raw = await file.text()
+      const parsed = JSON.parse(raw)
+      const normalized = restoreProjectPayload(parsed?.estimate || parsed)
+      return normalized.projectName
+    } catch (error) {
+      showActionError('Не удалось открыть файл расчёта. Проверьте, что выбран файл .roofcalc.', error)
+      return null
+    }
   }
 
   function addZone() {
@@ -727,8 +1239,8 @@ export function useCalculator() {
     section.works.push(item)
   }
 
-  function addMaterial(section, zone) {
-    const item = createEmptyMaterial(zone?.supplierType || 'ТехноНИКОЛЬ')
+  function addMaterial(section, zone = null) {
+    const item = createEmptyMaterial()
     item.code = nextExcelCellCodeForSections(zone?.sections || [section])
     item.cellCode = item.code
     section.materials.push(item)
@@ -854,6 +1366,7 @@ export function useCalculator() {
 
     return {
       projectName: projectName.value,
+      contractorProfile: contractorProfile.value || DEFAULT_CONTRACTOR_PROFILE_ID,
       vatRate: vatRate.value,
       estimateZones: clone(estimateZones.value),
       overheadExpenses: clone(overheadExpenses.value),
@@ -875,6 +1388,7 @@ export function useCalculator() {
 
   return {
     projectName,
+    contractorProfile,
     vatRate,
     estimateZones,
     overheadExpenses,
@@ -886,9 +1400,7 @@ export function useCalculator() {
 
     isTemplateDropdownOpen,
     dropdownRef,
-
     selectTemplate,
-    applySupplierToZone,
 
     globalRoofParams,
 
@@ -902,6 +1414,12 @@ export function useCalculator() {
 
     saveProject,
     loadProject,
+    getSavedProjects,
+    loadProjectById,
+    getCurrentEditableProjectPayload,
+    restoreProjectPayload,
+    exportProjectFile,
+    importProjectFile,
 
     addZone,
     removeZone,

@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="modal-overlay" @click.self="$emit('close')">
+    <div v-if="isOpen" class="modal-overlay">
       <div class="modal-card page-card additional-options-modal">
         <div class="modal-header">
           <div>

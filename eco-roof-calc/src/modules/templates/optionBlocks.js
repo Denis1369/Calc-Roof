@@ -9,16 +9,64 @@ function normalize(value) {
 
 // Базовые заводские настройки опций
 const BASE_OPTION_BLOCKS = {
+  inner_drains: {
+    title: 'Внутренние воронки',
+    sectionCode: 'inner_drains',
+    codeBases: { work: 190, material: 193 },
+    works: [
+      { name: 'Монтаж воронок внутреннего водоотведения', expression: 'ID', unit: 'шт' }
+    ],
+    materials: [
+      { name: 'Воронка водосточная ТехноНИКОЛЬ 110*720 с обогревом', expression: 'ID', unit: 'шт' }
+    ]
+  },
+  outer_drains: {
+    title: 'Внешние воронки',
+    sectionCode: 'outer_drains',
+    codeBases: { work: 195, material: 198 },
+    works: [
+      { name: 'Монтаж воронок внешнего водоотведения', expression: 'OD', unit: 'шт' }
+    ],
+    materials: [
+      { name: 'Парапетная воронка 100*100 мм с листоуловителем', expression: 'OD', unit: 'шт' }
+    ]
+  },
+  aerators: {
+    title: 'Аэраторы',
+    sectionCode: 'aerators',
+    codeBases: { work: 185, material: 188 },
+    works: [
+      { name: 'Устройство кровельных аэраторов', expression: 'A', unit: 'шт' }
+    ],
+    materials: [
+      { name: 'Кровельный аэратор', expression: 'A', unit: 'шт' }
+    ]
+  },
   rib_fill: {
     title: 'Заполнение гофр / L-профиль',
     sectionCode: 'rib_fill',
     codeBases: { work: 520, material: 540 },
     works: [
-      { name: 'L-образный профиль', expression: 'RB', unit: 'м/п' },
+      { name: 'Устройство L-образного профиля и профилей усиления', expression: 'LP', unit: 'м/п' },
+      { name: 'Устройство профилей усиления (коньковые усиления, усиления ендов)', expression: 'RU', unit: 'м/п' },
       { name: 'Заполнение гофр профлиста утеплителем НГ на длину 250 мм', expression: 'RB', unit: 'м/п' }
     ],
     materials: [
-      { name: 'Профиль усиления (коньковые усиления, усиления ендов)', expression: 'RB', unit: 'м/п' }
+      { name: 'L-образный профиль', expression: 'LP', unit: 'м/п' },
+      { name: 'Профиль усиления (коньковые усиления, усиления ендов)', expression: 'RU', unit: 'м/п' },
+      { name: 'NG', expression: 'RB * 0.25', unit: 'м2' },
+      { name: 'Саморез кровельный 4.8х29 сверлоконечный шайба EPDM', expression: 'RB * 5', unit: 'шт' }
+    ]
+  },
+  counter_slopes: {
+    title: 'Уклонообразующий слой',
+    sectionCode: 'counter_slopes',
+    codeBases: { work: 505, material: 508 },
+    works: [
+      { name: 'Устройство контруклона из теплоизоляционных плит LogicPIR Slope 3,4%', expression: 'K', unit: 'м2' }
+    ],
+    materials: [
+      { name: 'LOGICPIR SLOPE', expression: 'K * [Запас PIR]', unit: 'м2' }
     ]
   },
   vent_shafts: {
@@ -32,8 +80,9 @@ const BASE_OPTION_BLOCKS = {
       { name: 'LOGICROOF V-RP', expression: 'VS * 0.75', unit: 'м2' },
       { name: 'LOGICROOF V-SR', expression: 'VS * 0.2', unit: 'м2' },
       { name: 'Прижимная кровельная планка алюминиевая 30*2000мм', expression: 'VS', unit: 'м/п' },
-      { name: 'Крепеж кровельный ТехноНИКОЛЬ (саморез 5,5*35)', expression: 'VS * 5', unit: 'шт' },
-      { name: 'ПУ герметик', expression: 'max(1, ceil(VS / 20))', unit: 'шт' }
+      { name: 'Краевая кровельная планка алюминиевая 30*2000мм', expression: 'VS', unit: 'м/п' },
+      { name: 'Крепеж кровельный ТехноНИКОЛЬ (саморез 5,5*35)', expression: 'VS * 5 * 2', unit: 'шт' },
+      { name: 'ПУ герметик', expression: 'VS / 4', unit: 'шт' }
     ]
   },
   guardrails: {
@@ -45,7 +94,11 @@ const BASE_OPTION_BLOCKS = {
       { name: 'Монтаж примыканий к стойкам ограждение', expression: 'max(GRC, ceil(GR / 3))', unit: 'шт' }
     ],
     materials: [
-      { name: 'Кровельное ограждение ТехноНИКОЛЬ ККО/СК/600-2', expression: 'max(GRC, ceil(GR / 3))', unit: 'шт' }
+      { name: 'Кровельное ограждение ТехноНИКОЛЬ ККО/СК/600-2', expression: 'max(GRC, ceil(GR / 3))', unit: 'шт' },
+      { name: 'LOGICROOF V-RP', expression: 'max(GRC, ceil(GR / 3)) * 0.5', unit: 'м2' },
+      { name: 'LOGICROOF V-SR', expression: 'max(GRC, ceil(GR / 3)) * 0.3', unit: 'м2' },
+      { name: 'Рейка краевая алюминиевая TERMOCLIP LITE 2 м (100 п.м./упак)', expression: 'max(GRC, ceil(GR / 3)) * 0.5 / 3', unit: 'м/п' },
+      { name: 'ПУ герметик', expression: 'max(GRC, ceil(GR / 3)) * 0.25 / 4', unit: 'шт' }
     ]
   },
   deformation_joints: {
@@ -67,8 +120,13 @@ const BASE_OPTION_BLOCKS = {
       { name: 'Устройство примыканий к стойкам фахверка с утеплением', expression: 'FW', unit: 'шт' }
     ],
     materials: [
-      { name: 'LOGICROOF V-RP', expression: 'FW * 1.1', unit: 'м2' },
-      { name: 'LOGICROOF V-SR', expression: 'FW * 0.25', unit: 'м2' }
+      { name: 'Теплоизоляционный материал ТЕХНОРУФ В ЭКСТРА 50 мм', expression: '1.2 * 0.6 * 0.05 * 1.05 * FW', unit: 'м3' },
+      { name: 'LOGICROOF V-RP', expression: 'FW * 1', unit: 'м2' },
+      { name: 'LOGICROOF V-SR', expression: '0.2 * FW * 8', unit: 'м2' },
+      { name: 'Саморез остроконечный ТехноНИКОЛЬ 4,8*50 (500 шт/уп)', expression: '20 * FW', unit: 'шт' },
+      { name: 'Рейка краевая алюминиевая TERMOCLIP LITE 2 м (100 п.м./упак)', expression: '1.5 * FW', unit: 'м/п' },
+      { name: 'Крепеж кровельный ТехноНИКОЛЬ (саморез 5,5*35)', expression: '20 * FW', unit: 'шт' },
+      { name: 'ПУ герметик', expression: '(1.5 * FW) / 4', unit: 'шт' }
     ]
   },
   smoke_hatches: {
@@ -80,8 +138,11 @@ const BASE_OPTION_BLOCKS = {
       { name: 'Устройство примыкания к зенитным фонарям и люкам дымоудаления из ПВХ-мембраны', expression: 'SH', unit: 'шт' }
     ],
     materials: [
-      { name: 'LOGICROOF V-RP', expression: 'SH * 1.2', unit: 'м2' },
-      { name: 'LOGICROOF V-SR', expression: 'SH * 0.3', unit: 'м2' }
+      { name: 'LOGICROOF V-RP', expression: 'SH * 4.4', unit: 'м2' },
+      { name: 'LOGICROOF V-SR', expression: 'SH * 4.4 * 0.2 * 4', unit: 'м2' },
+      { name: 'Прижимная кровельная планка алюминиевая 30*2000мм', expression: 'SH * 4', unit: 'м/п' },
+      { name: 'Рейка краевая алюминиевая TERMOCLIP LITE 2 м (100 п.м./упак)', expression: 'SH * 4', unit: 'м/п' },
+      { name: 'ПУ герметик', expression: '(SH * 4) / 4', unit: 'шт' }
     ]
   },
   fire_protection: {
@@ -100,7 +161,7 @@ const BASE_OPTION_BLOCKS = {
     sectionCode: 'small_penetrations',
     codeBases: { work: 800, material: 820 },
     works: [
-      { name: 'Устройство примыканий к проходкам малого сечения диамтером до 150 мм (к гусакам для ввода кабеля, трубам и выводам)', expression: 'PTS', unit: 'шт' }
+      { name: 'Устройство примыканий к проходкам малого сечения d=10-80 мм (к гусакам для ввода кабеля, трубам и выводам)', expression: 'PTS', unit: 'шт' }
     ],
     materials: [
       { name: 'LOGICROOF V-RP', expression: 'PTS * 0.6', unit: 'м2' },
@@ -112,7 +173,7 @@ const BASE_OPTION_BLOCKS = {
     sectionCode: 'medium_penetrations',
     codeBases: { work: 840, material: 860 },
     works: [
-      { name: 'Устройство примыкания к проходкам среднего сечения диамтером от 150 мм до 300 мм (к дефлекторам круглого сечения, трубам)', expression: 'PTM', unit: 'шт' }
+      { name: 'Устройство примыкания к проходкам среднего сечения d=80-300 мм (к дефлекторам круглого сечения, трубам)', expression: 'PTM', unit: 'шт' }
     ],
     materials: [
       { name: 'LOGICROOF V-RP', expression: 'PTM * 1.0', unit: 'м2' },
@@ -136,7 +197,7 @@ const BASE_OPTION_BLOCKS = {
     sectionCode: 'cable_goosenecks',
     codeBases: { work: 920, material: 940 },
     works: [
-      { name: 'Устройство примыканий к проходкам малого сечения диамтером до 150 мм (к гусакам для ввода кабеля, трубам и выводам)', expression: 'CG', unit: 'шт' }
+      { name: 'Устройство примыканий к проходкам малого сечения d=10-80 мм (к гусакам для ввода кабеля, трубам и выводам)', expression: 'CG', unit: 'шт' }
     ],
     materials: [
       { name: 'LOGICROOF V-RP', expression: 'CG * 0.6', unit: 'м2' },

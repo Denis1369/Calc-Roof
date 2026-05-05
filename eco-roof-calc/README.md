@@ -1,7 +1,47 @@
-# Tauri + Vue 3
+# RoofCalc
 
-This template should help get you started developing with Tauri + Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Инженерный калькулятор плоской кровли на `Tauri + Vue 3`.
 
-## Recommended IDE Setup
+Приложение помогает пройти сценарий:
 
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+1. Выбрать кровельную систему.
+2. Задать инженерные параметры участка.
+3. Получить смету по материалам и работам с собственными расценками.
+
+В проекте убрана лишняя для расчета сущность `Тип / Поставщик`: материалы теперь считаются как инженерные позиции каталога, а не как переключение бренда внутри сметы.
+
+## Основные разделы
+
+- `Системы кровли` — подбор и сохраненные конфигурации.
+- `Инженерная смета` — расчет по участкам, формулам и накладным расходам.
+- `Справочники` — база материалов и расценок на работы.
+- `Формулы`, `Коэффициенты`, `Редактор систем` — административные инструменты для настройки калькулятора.
+
+## Структура
+
+- `src/app` — shell приложения, роутинг и навигация.
+- `src/features/estimate` — UI инженерной сметы.
+- `src/pages` — маршрутные страницы.
+- `src/components` — общие компоненты.
+- `src/modules` — прикладная логика и composable-модули.
+- `src/core` — БД, репозитории, отчеты, утилиты и сервисы.
+- `src-tauri` — desktop-обвязка Tauri.
+
+## Запуск
+
+```bash
+npm install
+npm run dev
+```
+
+Desktop-режим:
+
+```bash
+npm run tauri dev
+```
+
+Сборка frontend:
+
+```bash
+npm run build
+```

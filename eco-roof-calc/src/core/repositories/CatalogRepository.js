@@ -16,10 +16,43 @@ function groupBy(items, keyGetter) {
   return map
 }
 
+let materialVariantColumnsPromise = null
+
+async function getMaterialVariantColumns(db) {
+  if (!materialVariantColumnsPromise) {
+    materialVariantColumnsPromise = db.select('PRAGMA table_info(material_variants)').catch(() => [])
+  }
+
+  return materialVariantColumnsPromise
+}
+
+async function hasMaterialVariantSortOrder(db) {
+  const columns = await getMaterialVariantColumns(db)
+  return columns.some((column) => column.name === 'sort_order')
+}
+
+function buildMaterialVariantOrderClause({ includeMaterialId = false, hasSortOrder = false } = {}) {
+  const parts = []
+
+  if (includeMaterialId) {
+    parts.push('material_id')
+  }
+
+  parts.push('is_default DESC')
+
+  if (hasSortOrder) {
+    parts.push('sort_order')
+  }
+
+  parts.push('variant_label', 'id')
+  return parts.join(', ')
+}
+
 export class CatalogRepository {
   async listMaterials({ includeInactive = false } = {}) {
     const db = await getDb()
     const whereClause = includeInactive ? '' : 'WHERE is_active = 1'
+    const hasSortOrder = await hasMaterialVariantSortOrder(db)
 
     const materials = await db.select(`
       SELECT *
@@ -32,8 +65,8 @@ export class CatalogRepository {
       SELECT *
       FROM material_variants
       ${includeInactive ? '' : 'WHERE is_active = 1'}
-      ORDER BY material_id, is_default DESC, sort_order, variant_label, id
-    `.replace('sort_order', 'id'))
+      ORDER BY ${buildMaterialVariantOrderClause({ includeMaterialId: true, hasSortOrder })}
+    `)
 
     const variantsByMaterialId = groupBy(variants, (row) => row.material_id)
 
@@ -45,6 +78,7 @@ export class CatalogRepository {
 
   async getMaterialById(id) {
     const db = await getDb()
+    const hasSortOrder = await hasMaterialVariantSortOrder(db)
 
     const rows = await db.select(
       'SELECT * FROM materials WHERE id = $1 LIMIT 1',
@@ -56,7 +90,7 @@ export class CatalogRepository {
     }
 
     const variants = await db.select(
-      'SELECT * FROM material_variants WHERE material_id = $1 ORDER BY is_default DESC, id',
+      `SELECT * FROM material_variants WHERE material_id = $1 ORDER BY ${buildMaterialVariantOrderClause({ hasSortOrder })}`,
       [id]
     )
 

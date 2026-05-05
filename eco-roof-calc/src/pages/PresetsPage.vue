@@ -1,15 +1,18 @@
 <template>
   <div class="presets-page">
     <header class="page-header">
-      <h1 class="ui-title">Выбор кровельной системы</h1>
-      <p class="page-subtitle">Выберите готовую систему, отредактируйте параметры и при необходимости сохраните пресет</p>
+      <div class="page-step">Шаг 1</div>
+      <h1 class="ui-title">Калькулятор плоской кровли</h1>
+      <p class="page-subtitle">
+        Выберите систему, уточните инженерные параметры и передайте готовую основу в смету с вашими расценками.
+      </p>
     </header>
 
     <section v-if="savedPresets.length" class="saved-section page-card">
       <div class="saved-header">
         <div>
-          <h2 class="section-title">Сохранённые пресеты</h2>
-          <p class="section-subtitle">Их можно открыть, изменить и сразу отправить в смету</p>
+          <h2 class="section-title">Сохранённые конфигурации</h2>
+          <p class="section-subtitle">Их можно открыть, уточнить и сразу отправить в инженерную смету</p>
         </div>
       </div>
 
@@ -52,7 +55,7 @@
 
         <div class="card-footer">
           <div class="card-footer-actions">
-            <button class="calculate-btn" @click.stop="openSystem(system)">Выбрать систему ➔</button>
+            <button class="calculate-btn" @click.stop="openSystem(system)">Открыть для расчета ➔</button>
             <button class="edit-system-btn" @click.stop="editSystemBase(system)">Редактировать основу</button>
           </div>
         </div>
@@ -63,7 +66,11 @@
       :is-open="isOptionsOpen"
       :system="selectedSystem"
       :selected-keys="selectedOptionKeys"
+      :option-order="selectedOptionOrder"
+      continue-label="Вперед"
+      cancel-label="Назад на 1 шаг"
       @close="closeOptions"
+      @order-change="handleOptionsOrderChange"
       @continue="handleOptionsContinue"
     />
 
@@ -72,6 +79,9 @@
       :system="selectedSystem"
       :selected-keys="selectedOptionKeys"
       :initial-values="selectedParamValues"
+      submit-label="Вперед"
+      back-label="Назад на 1 шаг"
+      save-preset-label="Сохранить"
       @close="closeParams"
       @back="backToOptions"
       @submit="handleParamsSubmit"
@@ -89,7 +99,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { usePresets } from '@/modules/presets/usePresets'
 import { buildEstimateFromSystem, storePendingGeneratedEstimate } from '@/modules/templates/buildEstimate'
 import TemplateOptionsModal from '../components/TemplateOptionsModal.vue'
@@ -100,6 +110,9 @@ import * as templateEnhancements from '@/modules/templates/templateEnhancements'
 const sanitizeParamValues = templateEnhancements.sanitizeParamValues || templateEnhancements.sanitizeTemplateParamValues || ((_system = {}, _selectedKeys = [], values = {}) => ({ ...(values || {}) }))
 
 const router = useRouter()
+const route = useRoute()
+const LAST_SELECTIONS_KEY = 'eco-roof-last-system-selection-v1'
+const GLOBAL_OPTION_ORDER_KEY = 'eco-roof-global-option-order-v1'
 
 const {
   loading,
@@ -114,6 +127,7 @@ const {
 } = usePresets()
 
 const selectedOptionKeys = ref([])
+const selectedOptionOrder = ref([])
 const selectedParamValues = ref({})
 const isOptionsOpen = ref(false)
 const isParamsOpen = ref(false)
@@ -124,49 +138,91 @@ const presetDraftTitle = ref('')
 onMounted(async () => {
   await loadSystems()
   await loadSavedPresets()
+
+  const initialSystemCode = `${route.query.system || ''}`
+  if (initialSystemCode) {
+    const system = systems.value.find((item) => `${item.код || item.code || ''}` === initialSystemCode)
+    if (system) {
+      await router.replace({ path: '/systems', query: {} })
+      await openSystem(system)
+    }
+  }
 })
 
-async function openSystem(system) {
-  const fullSystem = await selectSystem(system.код || system.code)
-  if (!fullSystem) return
+function showActionError(message, error) {
+  console.error(error)
+  window.alert(message)
+}
 
-  editingPresetId.value = null
-  presetDraftTitle.value = ''
-  selectedOptionKeys.value = (fullSystem.опции || [])
-    .filter((option) => option.default)
-    .map((option) => option.key)
-  selectedParamValues.value = {}
-  isOptionsOpen.value = true
+async function openSystem(system) {
+  try {
+    const fullSystem = await selectSystem(system.код || system.code)
+    if (!fullSystem) return
+
+    const lastSelection = loadLastSystemSelection(fullSystem.код || fullSystem.code)
+
+    editingPresetId.value = null
+    presetDraftTitle.value = ''
+    selectedOptionKeys.value = Array.isArray(lastSelection?.selectedKeys)
+      ? [...lastSelection.selectedKeys]
+      : (fullSystem.опции || [])
+        .filter((option) => option.default)
+        .map((option) => option.key)
+    selectedOptionOrder.value = Array.isArray(lastSelection?.optionOrder)
+      ? [...lastSelection.optionOrder]
+      : loadGlobalOptionOrder()
+    selectedParamValues.value = { ...(lastSelection?.paramValues || {}) }
+    isOptionsOpen.value = true
+  } catch (error) {
+    showActionError('Не удалось открыть систему для расчёта.', error)
+  }
 }
 
 async function editPreset(preset) {
-  const fullSystem = await selectSystem(preset.system_code)
-  if (!fullSystem) return
+  try {
+    const fullSystem = await selectSystem(preset.system_code)
+    if (!fullSystem) return
 
-  editingPresetId.value = preset.id
-  presetDraftTitle.value = preset.title || ''
-  selectedOptionKeys.value = Array.isArray(preset.selectedKeys) ? [...preset.selectedKeys] : []
-  selectedParamValues.value = { ...(preset.params || {}) }
-  isOptionsOpen.value = true
+    editingPresetId.value = preset.id
+    presetDraftTitle.value = preset.title || ''
+    selectedOptionKeys.value = Array.isArray(preset.selectedKeys) ? [...preset.selectedKeys] : []
+    selectedOptionOrder.value = Array.isArray(preset.optionOrder)
+      ? [...preset.optionOrder]
+      : loadGlobalOptionOrder()
+    selectedParamValues.value = { ...(preset.params || {}) }
+    isOptionsOpen.value = true
+  } catch (error) {
+    showActionError('Не удалось открыть сохранённую конфигурацию.', error)
+  }
 }
 
 async function openPresetForEstimate(preset) {
-  const fullSystem = await selectSystem(preset.system_code)
-  if (!fullSystem) return
+  try {
+    const fullSystem = await selectSystem(preset.system_code)
+    if (!fullSystem) return
 
-  const selectedKeys = Array.isArray(preset.selectedKeys) ? [...preset.selectedKeys] : []
-  const paramValues = sanitizeParamValues(fullSystem, selectedKeys, preset.params || {})
+    const selectedKeys = Array.isArray(preset.selectedKeys) ? [...preset.selectedKeys] : []
+    const optionOrder = Array.isArray(preset.optionOrder) ? [...preset.optionOrder] : []
+    const paramValues = sanitizeParamValues(fullSystem, selectedKeys, preset.params || {})
 
-  const estimate = await buildEstimateFromSystem(fullSystem, selectedKeys, paramValues)
-  storePendingGeneratedEstimate(estimate)
-  router.push('/calculator')
+    const estimate = await buildEstimateFromSystem(fullSystem, selectedKeys, paramValues, { optionOrder })
+    storePendingGeneratedEstimate(estimate)
+    router.push('/calculator')
+  } catch (error) {
+    showActionError('Не удалось передать конфигурацию в смету.', error)
+  }
 }
 
 async function removePreset(preset) {
-  await deletePresetConfig(preset.id)
+  try {
+    await deletePresetConfig(preset.id)
+  } catch (error) {
+    showActionError('Не удалось удалить сохранённую конфигурацию.', error)
+  }
 }
 
 function closeOptions() {
+  saveLastSystemSelection()
   isOptionsOpen.value = false
 }
 
@@ -183,51 +239,114 @@ function closePresetNameModal() {
   isPresetNameOpen.value = false
 }
 
-function handleOptionsContinue(keys) {
+function handleOptionsOrderChange(order) {
+  selectedOptionOrder.value = Array.isArray(order) ? [...order] : []
+  saveGlobalOptionOrder(selectedOptionOrder.value)
+  saveLastSystemSelection()
+}
+
+function handleOptionsContinue(keys, order = []) {
+  if (Array.isArray(order) && order.length) {
+    handleOptionsOrderChange(order)
+  }
   selectedOptionKeys.value = [...keys]
   selectedParamValues.value = sanitizeParamValues(selectedSystem.value, selectedOptionKeys.value, selectedParamValues.value)
+  saveLastSystemSelection()
   isOptionsOpen.value = false
   isParamsOpen.value = true
 }
 
 async function handleParamsSubmit(values) {
-  if (!selectedSystem.value) return
+  try {
+    if (!selectedSystem.value) return
 
-  selectedParamValues.value = sanitizeParamValues(selectedSystem.value, selectedOptionKeys.value, values)
+    selectedParamValues.value = sanitizeParamValues(selectedSystem.value, selectedOptionKeys.value, values)
+    saveLastSystemSelection()
 
-  const estimate = await buildEstimateFromSystem(
-    selectedSystem.value,
-    selectedOptionKeys.value,
-    selectedParamValues.value
-  )
+    const estimate = await buildEstimateFromSystem(
+      selectedSystem.value,
+      selectedOptionKeys.value,
+      selectedParamValues.value,
+      { optionOrder: selectedOptionOrder.value }
+    )
 
-  storePendingGeneratedEstimate(estimate)
-  isParamsOpen.value = false
-  router.push('/calculator')
+    storePendingGeneratedEstimate(estimate)
+    isParamsOpen.value = false
+    router.push('/calculator')
+  } catch (error) {
+    showActionError('Не удалось создать смету по выбранной системе.', error)
+  }
 }
 
 function handleSavePreset(values) {
   selectedParamValues.value = sanitizeParamValues(selectedSystem.value, selectedOptionKeys.value, values)
+  saveLastSystemSelection()
   isPresetNameOpen.value = true
 }
 
+function readLastSelectionsMap() {
+  try {
+    return JSON.parse(localStorage.getItem(LAST_SELECTIONS_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function loadGlobalOptionOrder() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(GLOBAL_OPTION_ORDER_KEY) || '[]')
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function saveGlobalOptionOrder(order = []) {
+  if (!Array.isArray(order) || !order.length) return
+  localStorage.setItem(GLOBAL_OPTION_ORDER_KEY, JSON.stringify(order))
+}
+
+function loadLastSystemSelection(systemCode) {
+  const key = `${systemCode || ''}`
+  if (!key) return null
+  return readLastSelectionsMap()[key] || null
+}
+
+function saveLastSystemSelection() {
+  const systemCode = selectedSystem.value?.код || selectedSystem.value?.code || ''
+  if (!systemCode) return
+
+  const selections = readLastSelectionsMap()
+  selections[systemCode] = {
+    selectedKeys: [...selectedOptionKeys.value],
+    optionOrder: [...selectedOptionOrder.value],
+    paramValues: { ...selectedParamValues.value }
+  }
+  localStorage.setItem(LAST_SELECTIONS_KEY, JSON.stringify(selections))
+}
+
 async function submitPresetName(title) {
-  if (!selectedSystem.value) return
+  try {
+    if (!selectedSystem.value) return
 
-  const normalizedTitle = title || `${selectedSystem.value.название} ${new Date().toLocaleDateString('ru-RU')}`
+    const normalizedTitle = title || `${selectedSystem.value.название} ${new Date().toLocaleDateString('ru-RU')}`
 
-  await savePresetConfig({
-    id: editingPresetId.value,
-    systemCode: selectedSystem.value.код || selectedSystem.value.code,
-    title: normalizedTitle,
-    params: selectedParamValues.value,
-    features: {
-      selectedKeys: [...selectedOptionKeys.value]
-    }
-  })
+    await savePresetConfig({
+      id: editingPresetId.value,
+      systemCode: selectedSystem.value.код || selectedSystem.value.code,
+      title: normalizedTitle,
+      params: selectedParamValues.value,
+      features: {
+        selectedKeys: [...selectedOptionKeys.value],
+        optionOrder: [...selectedOptionOrder.value]
+      }
+    })
 
-  presetDraftTitle.value = normalizedTitle
-  isPresetNameOpen.value = false
+    presetDraftTitle.value = normalizedTitle
+    isPresetNameOpen.value = false
+  } catch (error) {
+    showActionError('Не удалось сохранить конфигурацию.', error)
+  }
 }
 
 function resolveSystemName(code) {
@@ -285,9 +404,25 @@ function getHydroLabel(value) {
   gap: 10px;
 }
 
+.page-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .page-subtitle {
   color: var(--text-soft);
   margin: 0;
+  max-width: 780px;
+  text-align: center;
 }
 
 .saved-section {
@@ -311,7 +446,12 @@ function getHydroLabel(value) {
   color: var(--text-soft);
 }
 
-.saved-grid,
+.saved-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 420px));
+  gap: 18px;
+}
+
 .systems-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

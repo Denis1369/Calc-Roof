@@ -2,6 +2,11 @@
   <div class="formulas-view">
     <div class="page-header">
       <h2 class="ui-title">Справочник формул расчета</h2>
+      <p class="formula-help">
+        Коротко: название видно в смете, код нужен системе как постоянная метка, а выражение считает количество.
+        Базовые переменные: S — площадь, P — периметр, A — аэраторы, ID — внутренние воронки, OD — парапетные воронки.
+        Коэффициенты пишутся в квадратных скобках, например: <code>S * [Запас ПВХ]</code>.
+      </p>
     </div>
 
     <div class="layout">
@@ -73,6 +78,9 @@
         <div class="form-group">
           <label class="ui-label">Код формулы:</label>
           <input v-model="currentFormula.код" class="ui-input" placeholder="Например: PVC_AREA" />
+          <div class="field-hint">
+            Код лучше не менять без необходимости: он связывает формулу с шаблонами. Пиши латиницей без пробелов, например INNER_DRAINS.
+          </div>
         </div>
 
         <div class="form-group">
@@ -83,6 +91,9 @@
             class="ui-textarea expression-input"
             rows="4"
           ></textarea>
+          <div class="field-hint">
+            Пример: <code>S * T / 1000 * [Запас XPS]</code>. Если нужен расход по строке выше, можно использовать код ячейки вроде A12.
+          </div>
         </div>
 
         <div class="tester-block mt-3">
@@ -334,16 +345,31 @@ async function deleteFormula() {
 <style scoped>
 .formulas-view {
   padding: 20px;
+  overflow-x: auto;
 }
 
 .page-header {
   margin-bottom: 20px;
 }
 
+.formula-help {
+  margin: 10px 0 0;
+  max-width: 980px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.formula-help code,
+.field-hint code {
+  color: var(--accent);
+  font-weight: 800;
+}
+
 .layout {
   display: flex;
   gap: 20px;
   align-items: flex-start;
+  min-width: 1080px;
 }
 
 .formulas-list {
@@ -456,6 +482,13 @@ async function deleteFormula() {
 
 .form-group {
   margin-bottom: 14px;
+}
+
+.field-hint {
+  margin-top: 6px;
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .expression-input {

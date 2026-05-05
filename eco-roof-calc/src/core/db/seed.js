@@ -1,6 +1,6 @@
 import { seedV2 } from './raw/seed_v2_tn10'
 
-export const SEED_VERSION = '2026-03-21-klassik-control-v1'
+export const SEED_VERSION = '2026-04-28-russian-formula-coefficients-v1'
 
 export async function runSeed(db) {
   await seedV2(db)

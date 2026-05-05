@@ -36,6 +36,7 @@ export const migration001InitV2 = {
         height_mm REAL,
         density REAL,
         profile_name TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
         price REAL NOT NULL DEFAULT 0,
         source_url TEXT NOT NULL DEFAULT '',
         extra_json TEXT NOT NULL DEFAULT '{}',

@@ -20,8 +20,10 @@
           <thead>
             <tr>
               <th class="col-category">Категория</th>
-              <th>Понятное название (для поиска в формулах)</th>
+              <th>Короткое название</th>
               <th class="col-value">Значение</th>
+              <th class="col-unit">Ед. изм.</th>
+              <th>Полное описание</th>
               <th class="col-actions">Действия</th>
             </tr>
           </thead>
@@ -36,13 +38,20 @@
               <td>
                 <input type="number" v-model.number="coef.значение" step="0.001" class="cell-input center bold" />
               </td>
+              <td>
+                <input v-model="coef.единица" placeholder="коэф." class="cell-input center" />
+              </td>
+              <td>
+                <textarea v-model="coef.описание" placeholder="Полное описание коэффициента" class="cell-input description-input"></textarea>
+                <div v-if="coef.код" class="code-hint">Код формулы: {{ coef.код }}</div>
+              </td>
               <td class="center">
                 <button @click="saveCoefficient(coef)" class="btn-icon" title="Сохранить">💾</button>
                 <button @click="deleteCoefficient(coef)" class="btn-icon danger-text" title="Удалить">🗑️</button>
               </td>
             </tr>
             <tr v-if="filteredCoefficients.length === 0">
-              <td colspan="4" class="center text-muted empty-cell">Ничего не найдено</td>
+              <td colspan="6" class="center text-muted empty-cell">Ничего не найдено</td>
             </tr>
           </tbody>
         </table>
@@ -85,16 +94,19 @@ async function loadCoefficients() {
   try {
     const db = await getDb()
     const rows = await db.select(`
-      SELECT id, group_name, name, value
+      SELECT id, normalize_key, group_name, name, value, unit, description
       FROM coefficients
       ORDER BY group_name, name, id
     `)
 
     coefficients.value = rows.map((row) => ({
       идентификатор: row.id,
+      код: row.normalize_key || '',
       заголовок: row.group_name || '',
       название: row.name || '',
-      значение: Number(row.value ?? 0)
+      значение: Number(row.value ?? 0),
+      единица: row.unit || '',
+      описание: row.description || ''
     }))
   } catch (error) {
     console.error('Ошибка загрузки коэффициентов:', error)
@@ -106,7 +118,9 @@ const filteredCoefficients = computed(() => {
   const q = searchQuery.value.toLowerCase()
   return coefficients.value.filter((c) =>
     (c.название && c.название.toLowerCase().includes(q)) ||
-    (c.заголовок && c.заголовок.toLowerCase().includes(q))
+    (c.заголовок && c.заголовок.toLowerCase().includes(q)) ||
+    (c.описание && c.описание.toLowerCase().includes(q)) ||
+    (c.код && c.код.toLowerCase().includes(q))
   )
 })
 
@@ -115,7 +129,9 @@ function addCoefficient() {
     tempId: Date.now(),
     заголовок: '',
     название: '',
-    значение: 1
+    значение: 1,
+    единица: 'коэф.',
+    описание: ''
   })
   searchQuery.value = ''
 }
@@ -129,7 +145,7 @@ async function saveCoefficient(coef) {
   try {
     const db = await getDb()
     const keyBase = coef.название?.trim() || `coef_${Date.now()}`
-    const normalize = normalizeKey(`${coef.заголовок || ''}_${keyBase}`)
+    const normalize = coef.код || normalizeKey(`${coef.заголовок || ''}_${keyBase}`)
 
     if (coef.идентификатор) {
       await db.execute(
@@ -138,15 +154,32 @@ async function saveCoefficient(coef) {
              group_name = $2,
              name = $3,
              value = $4,
+             unit = $5,
+             description = $6,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5`,
-        [normalize, coef.заголовок || '', coef.название.trim(), Number(coef.значение || 0), coef.идентификатор]
+         WHERE id = $7`,
+        [
+          normalize,
+          coef.заголовок || '',
+          coef.название.trim(),
+          Number(coef.значение || 0),
+          coef.единица || '',
+          coef.описание || '',
+          coef.идентификатор
+        ]
       )
     } else {
       await db.execute(
-        `INSERT INTO coefficients (normalize_key, group_name, name, value)
-         VALUES ($1, $2, $3, $4)`,
-        [normalize, coef.заголовок || '', coef.название.trim(), Number(coef.значение || 0)]
+        `INSERT INTO coefficients (normalize_key, group_name, name, value, unit, description)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          normalize,
+          coef.заголовок || '',
+          coef.название.trim(),
+          Number(coef.значение || 0),
+          coef.единица || '',
+          coef.описание || ''
+        ]
       )
     }
 
@@ -210,13 +243,16 @@ async function deleteCoefficient(coef) {
 
 .table-wrap {
   width: 100%;
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 75vh;
+  padding-bottom: 12px;
+  scrollbar-gutter: stable both-edges;
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 760px;
+  min-width: 1400px;
 }
 
 .data-table th,
@@ -225,6 +261,7 @@ async function deleteCoefficient(coef) {
   padding: 8px;
   text-align: left;
   color: var(--text-main);
+  vertical-align: top;
 }
 
 .data-table th {
@@ -250,6 +287,19 @@ async function deleteCoefficient(coef) {
   background: var(--bg-hover);
   border-radius: 6px;
   box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.description-input {
+  min-height: 64px;
+  min-width: 420px;
+  resize: vertical;
+  line-height: 1.35;
+}
+
+.code-hint {
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
 }
 
 .bold {
@@ -278,6 +328,10 @@ async function deleteCoefficient(coef) {
 
 .col-value {
   width: 140px;
+}
+
+.col-unit {
+  width: 120px;
 }
 
 .col-actions {

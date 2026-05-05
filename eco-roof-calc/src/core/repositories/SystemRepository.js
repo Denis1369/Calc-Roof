@@ -193,6 +193,38 @@ export class SystemRepository {
     await db.execute('DELETE FROM system_default_overrides WHERE system_code = $1', [systemCode])
   }
 
+  async deleteSystem(systemCode) {
+    const db = await getDb()
+    const rows = await db.select(
+      'SELECT id, code FROM systems WHERE code = $1 LIMIT 1',
+      [systemCode]
+    )
+    const system = rows[0] || null
+
+    if (!system?.id) {
+      return false
+    }
+
+    const layers = await db.select(
+      'SELECT id FROM system_layers WHERE system_id = $1',
+      [system.id]
+    )
+
+    for (const layer of layers) {
+      await db.execute('DELETE FROM system_layer_material_options WHERE layer_id = $1', [layer.id])
+      await db.execute('DELETE FROM system_layer_work_links WHERE layer_id = $1', [layer.id])
+    }
+
+    await db.execute('DELETE FROM system_layers WHERE system_id = $1', [system.id])
+    await db.execute('DELETE FROM system_features WHERE system_id = $1', [system.id])
+    await db.execute('DELETE FROM system_params WHERE system_id = $1', [system.id])
+    await db.execute('DELETE FROM system_default_overrides WHERE system_code = $1', [system.code])
+    await db.execute('DELETE FROM saved_system_configs WHERE system_code = $1', [system.code])
+    await db.execute('DELETE FROM systems WHERE id = $1', [system.id])
+
+    return true
+  }
+
   async getNextAvailableSystemCode(desiredName) {
     const db = await getDb()
     const baseCode = buildCustomSystemCode(desiredName)
@@ -429,7 +461,7 @@ export class SystemRepository {
       return this.loadSystemConfig(id)
     }
 
-    await db.execute(
+    const insertResult = await db.execute(
       `INSERT INTO saved_system_configs (
         system_code,
         title,
@@ -444,15 +476,12 @@ export class SystemRepository {
       ]
     )
 
-    const rows = await db.select(
-      `SELECT id
-       FROM saved_system_configs
-       WHERE system_code = $1 AND title = $2
-       ORDER BY id DESC
-       LIMIT 1`,
-      [systemCode, title]
-    )
+    const configId = Number(insertResult?.lastInsertId ?? 0)
+    if (configId > 0) {
+      return this.loadSystemConfig(configId)
+    }
 
+    const rows = await db.select('SELECT last_insert_rowid() AS id')
     return this.loadSystemConfig(rows[0]?.id)
   }
 

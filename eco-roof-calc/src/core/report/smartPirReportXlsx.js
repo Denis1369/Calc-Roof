@@ -1,5 +1,7 @@
 import { normalizeFormulaExpression } from '@/core/utils/cellFormulaEngine'
 import { normalizeExcelCellCode } from '@/core/utils/excelCellCodes'
+import { resolveContractorProfile } from '@/core/report/contractorProfiles'
+import { saveBinaryFile, XLSX_MIME } from '@/core/utils/binaryFileExport'
 
 function toNumber(value, fallback = 0) {
   const n = Number(value)
@@ -118,6 +120,67 @@ function setMergedValue(worksheet, range, value, style = {}) {
   return cell
 }
 
+function getCellDisplayText(value) {
+  if (value === null || value === undefined) return ''
+  if (value instanceof Date) return value.toLocaleDateString('ru-RU')
+  if (typeof value === 'object') {
+    if (value.richText) {
+      return value.richText.map((part) => part?.text || '').join('')
+    }
+
+    if (value.text) return `${value.text}`
+    if (value.result !== undefined && value.result !== null) return `${value.result}`
+    if (value.formula) return `${value.formula}`
+    return ''
+  }
+
+  return `${value}`
+}
+
+function estimateWrappedLineCount(text, columnWidth) {
+  const normalizedText = `${text || ''}`
+  if (!normalizedText.trim()) return 1
+
+  const charactersPerLine = Math.max(8, Math.floor(toNumber(columnWidth, 12) * 1.15))
+  return normalizedText
+    .split(/\r?\n/)
+    .reduce((lineCount, line) => {
+      const safeLength = Math.max(line.length, 1)
+      return lineCount + Math.max(1, Math.ceil(safeLength / charactersPerLine))
+    }, 0)
+}
+
+function applyReadableRowHeights(worksheet, { minHeight = 21, maxHeight = 96, lineHeight = 15 } = {}) {
+  const widths = worksheet.columns.map((column) => column.width || 12)
+
+  worksheet.eachRow((row) => {
+    let maxLineCount = 1
+
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      const text = getCellDisplayText(cell.value)
+      maxLineCount = Math.max(maxLineCount, estimateWrappedLineCount(text, widths[colNumber - 1]))
+    })
+
+    const computedHeight = Math.min(maxHeight, Math.max(minHeight, (maxLineCount * lineHeight) + 6))
+    row.height = Math.max(row.height || minHeight, computedHeight)
+  })
+}
+
+function setRowsHeight(worksheet, fromRow, toRow, height) {
+  for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
+    worksheet.getRow(rowIndex).height = height
+  }
+}
+
+function compactEstimateHeaderRows(worksheet) {
+  setRowsHeight(worksheet, 1, 2, 15)
+  setRowsHeight(worksheet, 3, 13, 13.5)
+  setRowsHeight(worksheet, 14, 18, 16)
+  worksheet.getRow(19).height = 44
+  worksheet.getRow(20).height = 12
+  worksheet.getRow(21).height = 24
+}
+
 function buildRoofInfoText(roof, zones = []) {
   const zoneLines = zones.length > 1
     ? zones.map((zone, index) => `Участок ${index + 1} «${zone?.name || `Участок ${index + 1}`}»: S = ${formatQty(zone?.roofParams?.area)} м2; P = ${formatQty(zone?.roofParams?.perimeter)} пог.м.`)
@@ -194,9 +257,39 @@ function findCoefficient(coefficients = [], key = '') {
   }) || null
 }
 
+const EXTRA_ZONE_FORMULA_PARAMS = [
+  ['K', 'Площадь контруклонов', ['counter_slope_area'], 'м2'],
+  ['CS', 'Примыкания к карнизному свесу', ['cornice_length'], 'м/п'],
+  ['LP', 'L-профиль', ['l_profile_length'], 'м/п'],
+  ['RU', 'Коньковые усиления / ендовы', ['ridge_reinforcement_length'], 'м/п'],
+  ['RB', 'Заполнение гофр / L-профиль', ['base_profile_rib_fill_length', 'corrugation_fill_length'], 'м/п'],
+  ['CF', 'Заполнение гофр', ['corrugation_fill_length', 'base_profile_rib_fill_length'], 'м/п'],
+  ['CG', 'Гусаки для ввода кабеля', ['cable_gooseneck_count'], 'шт'],
+  ['PTS', 'Проходки малого сечения', ['pass_through_small_count', 'pass_small_count'], 'шт'],
+  ['PTM', 'Проходки среднего сечения', ['pass_through_medium_count', 'pass_medium_count'], 'шт'],
+  ['PT', 'Прочие проходки', ['pass_through_count', 'pass_general_count'], 'шт'],
+  ['VS', 'Примыкания к вентшахтам', ['vent_shaft_perimeter'], 'м/п'],
+  ['FW', 'Стойки фахверка', ['fachwerk_count'], 'шт'],
+  ['SH', 'Люки дымоудаления', ['smoke_hatches_count', 'smoke_hatch_count'], 'шт'],
+  ['NG', 'Негорючий защитный материал', ['noncombustible_fill_area', 'fire_break_area'], 'м2'],
+  ['GR', 'Кровельное ограждение', ['guardrail_length'], 'м/п'],
+  ['GRC', 'Стойки ограждения', ['guardrail_post_count'], 'шт'],
+  ['WZA', 'Площадь ветровых зон', ['wind_zone_area'], 'м2']
+]
+
+function resolveFormulaParamValue(paramValues, keys = []) {
+  for (const key of keys) {
+    const value = Number(paramValues?.[key])
+    if (Number.isFinite(value)) return value
+  }
+
+  return 0
+}
+
 function buildZoneVariableDefinitions(zone = {}) {
   const definitions = []
   const seen = new Set()
+  const paramValues = zone?.templateMeta?.paramValues || {}
 
   const addDefinition = ({ key, label, value, unit = '', aliases = [] }) => {
     const mainKey = normalize(key)
@@ -269,7 +362,17 @@ function buildZoneVariableDefinitions(zone = {}) {
     })
   }
 
-  for (const [paramKey, rawValue] of Object.entries(zone?.templateMeta?.paramValues || {})) {
+  for (const [key, label, aliases, unit] of EXTRA_ZONE_FORMULA_PARAMS) {
+    addDefinition({
+      key,
+      label,
+      value: resolveFormulaParamValue(paramValues, aliases),
+      unit,
+      aliases
+    })
+  }
+
+  for (const [paramKey, rawValue] of Object.entries(paramValues)) {
     const number = Number(rawValue)
     if (!Number.isFinite(number)) continue
     if (seen.has(normalize(paramKey))) continue
@@ -288,17 +391,32 @@ function buildZoneVariableDefinitions(zone = {}) {
 function buildFormulaSupportSheet({ workbook, estimateZones, coefficients, fonts, fills, qtyFmt }) {
   const sheetName = 'Коэффициенты'
   const worksheet = workbook.addWorksheet(sheetName, {
-    views: [{ showGridLines: false }]
+    views: [{ showGridLines: false }],
+    pageSetup: {
+      paperSize: 9,
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: {
+        left: 0.25,
+        right: 0.25,
+        top: 0.35,
+        bottom: 0.35,
+        header: 0.2,
+        footer: 0.2
+      }
+    }
   })
 
   worksheet.properties.defaultRowHeight = 20
   worksheet.columns = [
-    { width: 24 },
-    { width: 22 },
-    { width: 42 },
-    { width: 14 },
+    { width: 20 },
+    { width: 18 },
+    { width: 34 },
     { width: 12 },
-    { width: 42 }
+    { width: 10 },
+    { width: 36 }
   ]
 
   let row = 1
@@ -437,11 +555,512 @@ function buildFormulaSupportSheet({ workbook, estimateZones, coefficients, fonts
     row += 1
   }
 
+  applyReadableRowHeights(worksheet)
+
   return {
     worksheet,
     zoneFormulaRefs,
     coefficientRefs
   }
+}
+
+const WORK_MATERIAL_MATCH_GROUPS = [
+  { key: 'waterproofing', patterns: ['гидроизоляц', 'мембран', 'пвх', 'битум', 'брм', 'наплавл'] },
+  { key: 'vapor_barrier', patterns: ['пароизоляц', 'паробарьер'] },
+  { key: 'insulation', patterns: ['утеплител', 'теплоизоляц', 'минват', 'минераловат', 'pir', 'xps'] },
+  { key: 'profile_sheet', patterns: ['профлист', 'профилирован', 'профнастил'] },
+  { key: 'primer', patterns: ['праймер', 'primer'] },
+  { key: 'screed', patterns: ['стяжк'] },
+  { key: 'drainage', patterns: ['воронк', 'водоотвод', 'желоб', 'слив'] },
+  { key: 'aerators', patterns: ['аэратор'] },
+  { key: 'walkways', patterns: ['дорожк', 'walkway'] },
+  { key: 'guardrails', patterns: ['огражден', 'стойк'] },
+  { key: 'consumables', patterns: ['скотч', 'лента', 'гермет', 'крепеж', 'саморез', 'телескоп', 'дюбел', 'очистител', 'клей', 'пена', 'мастик', 'газ'] }
+]
+
+const WORK_MATERIAL_STOP_WORDS = new Set([
+  'монтаж',
+  'устройство',
+  'работа',
+  'работы',
+  'материал',
+  'материалы',
+  'кровельный',
+  'кровли',
+  'покрытия',
+  'покрытие',
+  'слой',
+  'слои',
+  'для',
+  'под',
+  'над',
+  'при',
+  'без',
+  'надо',
+  'или',
+  'это',
+  'из',
+  'по',
+  'на',
+  'в'
+])
+
+function extractMatchTokens(value = '') {
+  return normalize(value)
+    .replace(/[^a-zа-я0-9]+/gi, ' ')
+    .split(' ')
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !WORK_MATERIAL_STOP_WORDS.has(token))
+}
+
+function getMatchGroups(value = '') {
+  const text = normalize(value)
+  const groups = new Set()
+
+  for (const group of WORK_MATERIAL_MATCH_GROUPS) {
+    if (group.patterns.some((pattern) => text.includes(pattern))) {
+      groups.add(group.key)
+    }
+  }
+
+  return groups
+}
+
+function countSharedValues(left, right) {
+  let count = 0
+  for (const value of left) {
+    if (right.has(value)) {
+      count += 1
+    }
+  }
+  return count
+}
+
+function getWorkMaterialRelationScore(work, material, section) {
+  const workText = `${work?.name || ''} ${section?.title || ''}`.trim()
+  const materialText = `${material?.name || material?.base_name || ''}`.trim()
+  if (!workText || !materialText) return -1
+
+  const workGroups = getMatchGroups(workText)
+  const materialGroups = getMatchGroups(materialText)
+  const workTokens = new Set(extractMatchTokens(workText))
+  const materialTokens = new Set(extractMatchTokens(materialText))
+
+  let score = countSharedValues(workGroups, materialGroups) * 4
+  score += countSharedValues(workTokens, materialTokens) * 2
+
+  if (workGroups.size > 0 && materialGroups.has('consumables')) {
+    score += 1
+  }
+
+  if (normalize(workText).includes(normalize(materialText)) || normalize(materialText).includes(normalize(workText))) {
+    score += 1
+  }
+
+  return score
+}
+
+function buildSectionMaterialAssignments(section = {}) {
+  const works = Array.isArray(section?.works) ? section.works : []
+  const materials = Array.isArray(section?.materials) ? section.materials : []
+  const assignments = new Map()
+
+  works.forEach((work, index) => {
+    assignments.set(work?.id || work?.code || `work-${index}`, [])
+  })
+
+  if (!works.length) {
+    return assignments
+  }
+
+  if (works.length === 1) {
+    assignments.get(works[0]?.id || works[0]?.code || 'work-0').push(...materials)
+    return assignments
+  }
+
+  for (const material of materials) {
+    let bestWork = works[0]
+    let bestScore = Number.NEGATIVE_INFINITY
+
+    for (const work of works) {
+      const score = getWorkMaterialRelationScore(work, material, section)
+      if (score > bestScore) {
+        bestScore = score
+        bestWork = work
+      }
+    }
+
+    const key = bestWork?.id || bestWork?.code || 'work-0'
+    if (!assignments.has(key)) {
+      assignments.set(key, [])
+    }
+
+    assignments.get(key).push(material)
+  }
+
+  return assignments
+}
+
+function formatMaterialConsumption(work, material) {
+  const workQty = toNumber(work?.qty, 0)
+  const materialQty = toNumber(material?.qty, 0)
+  const materialUnit = `${material?.unit || ''}`.trim()
+  const workUnit = `${work?.unit || ''}`.trim()
+
+  if (workQty > 0 && materialQty > 0) {
+    const unitText = materialUnit && workUnit ? ` ${materialUnit}/${workUnit}` : materialUnit ? ` ${materialUnit}` : ''
+    return `${formatQty(materialQty / workQty)}${unitText}`
+  }
+
+  if (materialQty > 0) {
+    return `${formatQty(materialQty)}${materialUnit ? ` ${materialUnit}` : ''}`
+  }
+
+  return ''
+}
+
+function getMaterialName(material) {
+  return `${material?.name || material?.base_name || material?.display_name || ''}`.trim()
+}
+
+function getMaterialCertPassport(material) {
+  return `${material?.certPassport || material?.cert_passport || material?.certificate || material?.passport || material?.raw?.cert_passport || material?.raw?.certificate || material?.raw?.passport || ''}`.trim()
+}
+
+function getWorkDate(work) {
+  return `${work?.workDate || work?.work_date || work?.date || ''}`.trim()
+}
+
+function createWorkSheetRow({ zone, section, work, material = null, includeWorkValues = true }) {
+  return {
+    workName: work?.name || section?.title || '',
+    unit: includeWorkValues ? (work?.unit || '') : '',
+    volume: includeWorkValues ? formatQty(work?.qty) : '',
+    location: '',
+    material: material ? getMaterialName(material) : '',
+    certPassport: material ? getMaterialCertPassport(material) : '',
+    materialConsumption: material ? formatMaterialConsumption(work, material) : '',
+    workDate: getWorkDate(work)
+  }
+}
+
+function buildWorkMaterialsRows(estimateZones = []) {
+  const rows = []
+
+  for (let zoneIndex = 0; zoneIndex < estimateZones.length; zoneIndex += 1) {
+    const zone = estimateZones[zoneIndex]
+    const zoneSections = (zone?.sections || []).filter(hasContent)
+
+    for (const section of zoneSections) {
+      const works = Array.isArray(section?.works) ? section.works : []
+      const materials = Array.isArray(section?.materials) ? section.materials : []
+      const assignments = buildSectionMaterialAssignments(section)
+
+      if (works.length) {
+        works.forEach((work, workIndex) => {
+          const workKey = work?.id || work?.code || `work-${workIndex}`
+          const relatedMaterials = assignments.get(workKey) || []
+
+          rows.push(createWorkSheetRow({ zone, section, work }))
+
+          relatedMaterials.forEach((material) => {
+            rows.push(createWorkSheetRow({
+              zone,
+              section,
+              work,
+              material,
+              includeWorkValues: false
+            }))
+          })
+        })
+
+        continue
+      }
+
+      materials.forEach((material) => {
+        rows.push({
+          workName: section?.title || '',
+          unit: '',
+          volume: '',
+          location: '',
+          material: getMaterialName(material),
+          certPassport: getMaterialCertPassport(material),
+          materialConsumption: `${formatQty(material?.qty)}${material?.unit ? ` ${material.unit}` : ''}`,
+          workDate: ''
+        })
+      })
+    }
+  }
+
+  return rows
+}
+
+function buildWorkMaterialsSheet({ workbook, estimateZones, fonts, fills }) {
+  const worksheet = workbook.addWorksheet('Работы и материалы', {
+    views: [{ state: 'frozen', ySplit: 1, showGridLines: false }],
+    pageSetup: {
+      paperSize: 9,
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: {
+        left: 0.25,
+        right: 0.25,
+        top: 0.35,
+        bottom: 0.35,
+        header: 0.2,
+        footer: 0.2
+      }
+    }
+  })
+
+  worksheet.properties.defaultRowHeight = 20
+  worksheet.columns = [
+    { width: 44 },
+    { width: 9 },
+    { width: 12 },
+    { width: 14 },
+    { width: 38 },
+    { width: 16 },
+    { width: 18 },
+    { width: 18 }
+  ]
+
+  const headers = [
+    'Наименование работ',
+    'ед.изм',
+    'Объем',
+    'Расположение на схеме',
+    'Материал',
+    'серт.паспорт',
+    'Расход материала',
+    'Дата проведения работ'
+  ]
+
+  worksheet.getRow(1).values = headers
+  styleRange(worksheet, 1, 1, 8, {
+    font: fonts.header,
+    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+    fill: fills.header
+  }, 'medium')
+  worksheet.autoFilter = 'A1:H1'
+
+  const rows = buildWorkMaterialsRows(estimateZones)
+
+  if (!rows.length) {
+    setMergedValue(worksheet, 'A2:H2', 'Нет данных для дополнительного листа', {
+      font: { ...fonts.base, italic: true },
+      alignment: { horizontal: 'center', vertical: 'middle' }
+    })
+    styleRange(worksheet, 2, 1, 8, {
+      font: { ...fonts.base, italic: true },
+      alignment: { horizontal: 'center', vertical: 'middle' }
+    })
+    applyReadableRowHeights(worksheet)
+    return worksheet
+  }
+
+  let rowIndex = 2
+  for (const row of rows) {
+    worksheet.getCell(`A${rowIndex}`).value = row.workName
+    worksheet.getCell(`B${rowIndex}`).value = row.unit
+    worksheet.getCell(`C${rowIndex}`).value = row.volume
+    worksheet.getCell(`D${rowIndex}`).value = row.location
+    worksheet.getCell(`E${rowIndex}`).value = row.material
+    worksheet.getCell(`F${rowIndex}`).value = row.certPassport
+    worksheet.getCell(`G${rowIndex}`).value = row.materialConsumption
+    worksheet.getCell(`H${rowIndex}`).value = row.workDate
+
+    styleRange(worksheet, rowIndex, 1, 8, {
+      font: fonts.base,
+      alignment: { vertical: 'middle', horizontal: 'left', wrapText: true }
+    })
+    worksheet.getCell(`B${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    worksheet.getCell(`C${rowIndex}`).alignment = { horizontal: 'right', vertical: 'middle' }
+    worksheet.getCell(`F${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    worksheet.getCell(`G${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    worksheet.getCell(`H${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    worksheet.getCell(`D${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    rowIndex += 1
+  }
+
+  applyReadableRowHeights(worksheet)
+  return worksheet
+}
+
+function buildMaterialSpecificationRows(estimateZones = []) {
+  const map = new Map()
+
+  for (const zone of estimateZones || []) {
+    for (const section of zone?.sections || []) {
+      for (const material of section?.materials || []) {
+        const name = getMaterialName(material)
+        if (!name) continue
+
+        const qty = toNumber(material?.qty, 0)
+        const price = round2(material?.price)
+        const variant = material?.variant_label || material?.profile_name || ''
+        const thickness = material?.thickness || material?.profileThickness || ''
+        const thicknessLabel = thickness ? `${formatQty(thickness)} ${material?.thickness_unit || 'мм'}` : ''
+        const key = [
+          name,
+          material?.unit || '',
+          price,
+          variant,
+          thicknessLabel
+        ].join('|')
+
+        if (!map.has(key)) {
+          map.set(key, {
+            section: section?.title || '',
+            name,
+            variant,
+            thickness: thicknessLabel,
+            unit: material?.unit || '',
+            qty: 0,
+            price,
+            total: 0
+          })
+        }
+
+        const row = map.get(key)
+        if (!row.section.includes(section?.title || '')) {
+          row.section = [row.section, section?.title || ''].filter(Boolean).join('; ')
+        }
+        row.qty = round2(row.qty + qty)
+        row.total = round2(row.total + getItemTotal(material))
+      }
+    }
+  }
+
+  return [...map.values()].filter((row) => row.qty > 0 || row.total > 0)
+}
+
+function buildMaterialSpecificationSheet({ workbook, estimateZones, fonts, fills }) {
+  const worksheet = workbook.addWorksheet('Спецификация материалов', {
+    views: [{ state: 'frozen', ySplit: 2, showGridLines: false }],
+    pageSetup: {
+      paperSize: 9,
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: {
+        left: 0.25,
+        right: 0.25,
+        top: 0.35,
+        bottom: 0.35,
+        header: 0.2,
+        footer: 0.2
+      }
+    }
+  })
+
+  worksheet.properties.defaultRowHeight = 20
+  worksheet.columns = [
+    { width: 28 },
+    { width: 54 },
+    { width: 20 },
+    { width: 16 },
+    { width: 10 },
+    { width: 14 },
+    { width: 15 },
+    { width: 16 }
+  ]
+
+  setMergedValue(worksheet, 'A1:H1', 'Спецификация материалов', {
+    font: { ...fonts.title, size: 14 },
+    alignment: { horizontal: 'center', vertical: 'middle' },
+    fill: fills.total
+  })
+  styleRange(worksheet, 1, 1, 8, {
+    font: { ...fonts.title, size: 14 },
+    alignment: { horizontal: 'center', vertical: 'middle' },
+    fill: fills.total
+  }, 'medium')
+  worksheet.getRow(1).height = 24
+
+  const headers = [
+    'Раздел',
+    'Наименование материала',
+    'Профиль / вариант',
+    'Толщина / размер',
+    'Ед. изм.',
+    'Кол-во',
+    'Цена за ед.',
+    'Сумма'
+  ]
+  worksheet.getRow(2).values = headers
+  styleRange(worksheet, 2, 1, 8, {
+    font: fonts.header,
+    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+    fill: fills.header
+  }, 'medium')
+  worksheet.autoFilter = 'A2:H2'
+
+  const rows = buildMaterialSpecificationRows(estimateZones)
+  if (!rows.length) {
+    setMergedValue(worksheet, 'A3:H3', 'Материалы не добавлены', {
+      font: { ...fonts.base, italic: true },
+      alignment: { horizontal: 'center', vertical: 'middle' }
+    })
+    styleRange(worksheet, 3, 1, 8, {
+      font: { ...fonts.base, italic: true },
+      alignment: { horizontal: 'center', vertical: 'middle' }
+    })
+    return worksheet
+  }
+
+  const moneyFmt = '#,##0.00" ₽"'
+  const qtyFmt = '#,##0.00'
+  let rowIndex = 3
+
+  for (const row of rows) {
+    worksheet.getCell(`A${rowIndex}`).value = row.section
+    worksheet.getCell(`B${rowIndex}`).value = row.name
+    worksheet.getCell(`C${rowIndex}`).value = row.variant
+    worksheet.getCell(`D${rowIndex}`).value = row.thickness
+    worksheet.getCell(`E${rowIndex}`).value = row.unit
+    worksheet.getCell(`F${rowIndex}`).value = row.qty
+    worksheet.getCell(`G${rowIndex}`).value = row.price
+    worksheet.getCell(`H${rowIndex}`).value = row.total
+
+    styleRange(worksheet, rowIndex, 1, 8, {
+      font: fonts.base,
+      alignment: { vertical: 'middle', horizontal: 'left', wrapText: true }
+    })
+    worksheet.getCell(`C${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    worksheet.getCell(`D${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    worksheet.getCell(`E${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    worksheet.getCell(`F${rowIndex}`).alignment = { horizontal: 'right', vertical: 'middle' }
+    worksheet.getCell(`G${rowIndex}`).alignment = { horizontal: 'right', vertical: 'middle' }
+    worksheet.getCell(`H${rowIndex}`).alignment = { horizontal: 'right', vertical: 'middle' }
+    worksheet.getCell(`F${rowIndex}`).numFmt = qtyFmt
+    worksheet.getCell(`G${rowIndex}`).numFmt = moneyFmt
+    worksheet.getCell(`H${rowIndex}`).numFmt = moneyFmt
+    rowIndex += 1
+  }
+
+  const totalRow = rowIndex
+  setMergedValue(worksheet, `A${totalRow}:G${totalRow}`, 'Итого за материалы:', {
+    font: fonts.total,
+    alignment: { horizontal: 'right', vertical: 'middle' },
+    fill: fills.total
+  })
+  worksheet.getCell(`H${totalRow}`).value = rows.reduce((sum, row) => round2(sum + row.total), 0)
+  worksheet.getCell(`H${totalRow}`).font = fonts.total
+  worksheet.getCell(`H${totalRow}`).alignment = { horizontal: 'right', vertical: 'middle' }
+  worksheet.getCell(`H${totalRow}`).fill = fills.total
+  worksheet.getCell(`H${totalRow}`).numFmt = moneyFmt
+  styleRange(worksheet, totalRow, 1, 8, {
+    font: fonts.total,
+    alignment: { vertical: 'middle' },
+    fill: fills.total
+  }, 'medium')
+
+  applyReadableRowHeights(worksheet, { minHeight: 20, maxHeight: 80 })
+  return worksheet
 }
 
 function buildQtyCellRefMaps(visibleZones = [], startRow = 1) {
@@ -497,6 +1116,23 @@ function buildQtyCellRefMaps(visibleZones = [], startRow = 1) {
   return zoneMaps
 }
 
+const EXCEL_FUNCTION_NAMES = new Map([
+  ['max', 'MAX'],
+  ['min', 'MIN'],
+  ['ceil', 'CEILING.MATH'],
+  ['ceiling', 'CEILING.MATH'],
+  ['floor', 'FLOOR.MATH'],
+  ['round', 'ROUND'],
+  ['abs', 'ABS'],
+  ['sqrt', 'SQRT'],
+  ['pow', 'POWER'],
+  ['if', 'IF'],
+  ['and', 'AND'],
+  ['or', 'OR'],
+  ['not', 'NOT'],
+  ['sum', 'SUM']
+])
+
 function translateExpressionToExcel(expression, { zoneVarRefs, coefficientRefs, qtyRefsByCode }) {
   const prepared = normalizeFormulaExpression(expression || '0').replace(/^=/, '').trim()
   if (!prepared) return '0'
@@ -514,6 +1150,11 @@ function translateExpressionToExcel(expression, { zoneVarRefs, coefficientRefs, 
       return qtyRefsByCode.get(rowCode) || '0'
     }
 
+    const excelFunction = EXCEL_FUNCTION_NAMES.get(normalize(token))
+    if (excelFunction) {
+      return excelFunction
+    }
+
     const variableRef = zoneVarRefs.get(normalize(token))
     if (variableRef) {
       return variableRef
@@ -529,13 +1170,14 @@ export async function exportSmartPirReportXlsx(payload = {}) {
   const estimateZones = Array.isArray(payload?.estimateZones) ? payload.estimateZones : []
   const overheadExpenses = Array.isArray(payload?.overheadExpenses) ? payload.overheadExpenses : []
   const coefficients = Array.isArray(payload?.coefficients) ? payload.coefficients : []
+  const contractor = resolveContractorProfile(payload?.contractorProfile)
   const visibleZones = estimateZones.filter((zone) => (zone?.sections || []).some(hasContent))
   const roof = getGlobalRoofParams(estimateZones)
 
   const ExcelJS = (await import('exceljs')).default
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'Eco-Roof'
-  workbook.company = 'Eco-Roof'
+  workbook.company = contractor.name || 'RoofCalc'
   workbook.created = new Date()
   workbook.modified = new Date()
   workbook.calcProperties.fullCalcOnLoad = true
@@ -562,11 +1204,11 @@ export async function exportSmartPirReportXlsx(payload = {}) {
 
   worksheet.properties.defaultRowHeight = 20
   worksheet.columns = [
-    { width: 62 },
-    { width: 10 },
-    { width: 14 },
-    { width: 21 },
-    { width: 24 }
+    { width: 48 },
+    { width: 9 },
+    { width: 12 },
+    { width: 16 },
+    { width: 18 }
   ]
 
   const fonts = {
@@ -602,60 +1244,72 @@ export async function exportSmartPirReportXlsx(payload = {}) {
   let row = 1
 
   setMergedValue(worksheet, `A${row}:E${row}`, 'Приложение №1 к Договору подряда №__________ от __.__.2025 г.', {
-    font: { ...fonts.base, size: 11 },
+    font: { ...fonts.small, size: 9 },
     alignment: { horizontal: 'right', vertical: 'middle' }
   })
   row += 2
 
-  setMergedValue(worksheet, `A${row}:B${row}`, 'Согласовано', {
-    font: fonts.small,
+  const contractorRequisites = Array.isArray(contractor.requisites)
+    ? contractor.requisites.filter(Boolean)
+    : []
+
+  setMergedValue(worksheet, `A${row}:C${row}`, 'Согласовано', {
+    font: { ...fonts.small, size: 8 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   setMergedValue(worksheet, `D${row}:E${row}`, 'Утверждаю', {
-    font: fonts.small,
+    font: { ...fonts.small, size: 8 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   row += 1
 
-  setMergedValue(worksheet, `A${row}:B${row}`, '«Подрядчик»', {
-    font: fonts.small,
+  setMergedValue(worksheet, `A${row}:C${row}`, '«Подрядчик»', {
+    font: { ...fonts.small, size: 8 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   setMergedValue(worksheet, `D${row}:E${row}`, '«Заказчик»', {
-    font: fonts.small,
+    font: { ...fonts.small, size: 8 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   row += 1
 
-  setMergedValue(worksheet, `A${row}:B${row}`, 'ООО «СК-ЮГ»', {
-    font: fonts.base,
+  setMergedValue(worksheet, `A${row}:C${row}`, contractor.name, {
+    font: { ...fonts.base, size: 9 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   setMergedValue(worksheet, `D${row}:E${row}`, 'ООО «______________________________»', {
-    font: fonts.base,
+    font: { ...fonts.base, size: 9 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   row += 1
 
-  setMergedValue(worksheet, `A${row}:B${row}`, 'ИНН / КПП: 2312330110 / 231201001', {
-    font: fonts.base,
+  setMergedValue(worksheet, `A${row}:C${row}`, contractor.innKppLabel, {
+    font: { ...fonts.base, size: 9 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   setMergedValue(worksheet, `D${row}:E${row}`, 'ИНН / КПП: _______________________', {
-    font: fonts.base,
+    font: { ...fonts.base, size: 9 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   row += 1
 
-  setMergedValue(worksheet, `A${row}:B${row}`, 'Ген. директор________________  (Панюков А.А.)', {
-    font: fonts.base,
+  for (const requisite of contractorRequisites) {
+    setMergedValue(worksheet, `A${row}:C${row}`, requisite, {
+      font: { ...fonts.small, size: 7 },
+      alignment: { horizontal: 'left', vertical: 'middle', wrapText: false }
+    })
+    row += 1
+  }
+
+  setMergedValue(worksheet, `A${row}:C${row}`, contractor.signatureLabel, {
+    font: { ...fonts.base, size: 9 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   setMergedValue(worksheet, `D${row}:E${row}`, 'Директор______________________  (Ф.И.О.)', {
-    font: fonts.base,
+    font: { ...fonts.base, size: 9 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
-  row += 3
+  row += 2
 
   setMergedValue(worksheet, `A${row}:E${row}`, 'СМЕТА №1', {
     font: { ...fonts.base, size: 11, bold: true },
@@ -667,26 +1321,26 @@ export async function exportSmartPirReportXlsx(payload = {}) {
     font: fonts.base,
     alignment: { horizontal: 'center', vertical: 'middle' }
   })
-  row += 3
+  row += 2
 
   setMergedValue(worksheet, `A${row}:E${row}`, `Наименование объекта: ${projectName}`, {
-    font: fonts.base,
+    font: { ...fonts.base, size: 10 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   row += 1
 
   setMergedValue(worksheet, `A${row}:E${row}`, 'Адрес объекта: ______________________________', {
-    font: fonts.base,
+    font: { ...fonts.base, size: 10 },
     alignment: { horizontal: 'left', vertical: 'middle' }
   })
   row += 1
 
   setMergedValue(worksheet, `A${row}:E${row + 1}`, buildRoofInfoText(roof, estimateZones), {
-    font: { ...fonts.base, size: 11 },
+    font: { ...fonts.base, size: 9 },
     alignment: { horizontal: 'left', vertical: 'top', wrapText: true }
   })
-  worksheet.getRow(row).height = 74
-  worksheet.getRow(row + 1).height = 10
+  worksheet.getRow(row).height = 44
+  worksheet.getRow(row + 1).height = 12
   row += 2
 
   worksheet.getCell(`A${row}`).value = 'Наименование работ.'
@@ -1086,10 +1740,29 @@ export async function exportSmartPirReportXlsx(payload = {}) {
       if (!cell.alignment) cell.alignment = { vertical: 'middle' }
     })
   })
+  applyReadableRowHeights(worksheet, { minHeight: 22, maxHeight: 110 })
+  compactEstimateHeaderRows(worksheet)
+
+  buildWorkMaterialsSheet({
+    workbook,
+    estimateZones,
+    fonts,
+    fills
+  })
+
+  buildMaterialSpecificationSheet({
+    workbook,
+    estimateZones,
+    fonts,
+    fills
+  })
 
   const buffer = await workbook.xlsx.writeBuffer()
   const baseName = sanitizeFileName(projectName || 'Смета')
   const fileName = `${baseName}.xlsx`
-  triggerBrowserDownload(buffer, fileName)
-  return fileName
+  return saveBinaryFile({
+    bytes: buffer,
+    fileName,
+    mimeType: XLSX_MIME
+  })
 }

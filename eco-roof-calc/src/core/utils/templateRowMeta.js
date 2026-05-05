@@ -21,6 +21,21 @@ function isBrmContext({ waterproofing = '', name = '', role = '' }) {
   return wp.includes('brm') || includesAny(title, ['унифлекс', 'техноэласт', 'технобарьер']) || ['primer_bucket', 'gas'].includes(r)
 }
 
+function isCleanAreaWorkLayer(layer) {
+  return [
+    'base',
+    'vapor_barrier',
+    'lower_insulation',
+    'upper_insulation',
+    'insulation',
+    'slope',
+    'screed',
+    'primer',
+    'separator',
+    'waterproofing'
+  ].includes(layer)
+}
+
 export function deriveTemplateCellCode({
   roofBase = '',
   waterproofing = '',
@@ -186,6 +201,10 @@ export function deriveTemplateCellCode({
     return type === 'work' ? 'C149' : 'C152'
   }
 
+  if (layer === 'counter_slopes' || layer === 'counter_slope') {
+    return type === 'work' ? 'C160' : 'C162'
+  }
+
   if (layer === 'fire_protection' || layer === 'fire_substrate') {
     return type === 'work' ? 'C174' : 'C177'
   }
@@ -207,6 +226,10 @@ export function deriveExpressionOverride({
   const layer = normalize(layerCode)
   const title = normalize(name)
   const r = normalize(role)
+
+  if (type === 'work' && isCleanAreaWorkLayer(layer)) {
+    return 'S'
+  }
 
   if (layer === 'base' && roof.includes('proflist') && type === 'material') {
     if (includesAny(title, ['заклеп']) || r === 'base_rivet') {
@@ -239,7 +262,7 @@ export function deriveExpressionOverride({
 
     if (type === 'material') {
       if (includesAny(title, ['скотч', 'tape']) || r === 'tape') {
-        return '((C47 / 3) + C131 + C130) / 25'
+        return '((C47 / 3) + max(P, C130 + C131) + CS) / 25'
       }
 
       if (includesAny(title, ['праймер']) || r === 'primer_bucket') {
@@ -297,19 +320,19 @@ export function deriveExpressionOverride({
 
     if (type === 'material') {
       if (includesAny(title, ['очиститель', 'cleaner']) || r === 'cleaner') {
-        return 'max(1, ceil(C100 / 500))'
+        return 'max(1, ceil(max(C100, S) / 500))'
       }
 
       if (includesAny(title, ['телескоп', 'тарельчат', 'держатель']) || r === 'fastener') {
-        return 'C94 * 5'
+        return 'max(C94, C92 + C93, S) * 5'
       }
 
       if (includesAny(title, ['саморез', 'анкер'])) {
-        return 'C94 * 5'
+        return 'max(C94, C92 + C93, S) * 5'
       }
 
       if (includesAny(title, ['мембрана', 'logicroof'])) {
-        return '(C92 * 1.18) + (C93 * 1.5)'
+        return 'max(C92 + C93, S) * [ПВХ рулон 1,05 м]'
       }
     }
 
@@ -343,27 +366,27 @@ export function deriveExpressionOverride({
 
     if (type === 'material') {
       if (includesAny(title, ['армирован']) || r === 'main_membrane') {
-        return '(C130 + C131) * 1.15'
+        return 'max(P, C130 + C131) * [Мембрана на парапет]'
       }
 
       if (includesAny(title, ['неармирован']) || r === 'aux_membrane') {
-        return 'max(1, ceil((C130 + C131) / 30))'
+        return 'max(P, C130 + C131) * [Доборная мембрана парапета]'
       }
 
       if (includesAny(title, ['прижимн'])) {
-        return 'C130 + C131'
+        return 'max(P, C130 + C131)'
       }
 
       if (includesAny(title, ['краев'])) {
-        return 'C130 + C131'
+        return 'max(P, C130 + C131)'
       }
 
       if (includesAny(title, ['крепеж', 'саморез']) || r === 'planck_fastener') {
-        return '(C142 + C143) * 5'
+        return 'max(P, C130 + C131) * [Крепеж планок]'
       }
 
       if (includesAny(title, ['герметик']) || r === 'sealant') {
-        return 'C143 / 4'
+        return 'max(P, C130 + C131) * [Герметик планок]'
       }
     }
 
@@ -384,6 +407,10 @@ export function deriveExpressionOverride({
 
   if (layer === 'walkways' && type === 'material' && r === 'walkway_item') {
     return 'WL / 0.6'
+  }
+
+  if ((layer === 'counter_slopes' || layer === 'counter_slope') && type === 'work') {
+    return 'K'
   }
 
   return ''

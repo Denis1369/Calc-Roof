@@ -1,193 +1,139 @@
 <template>
   <div class="calculator-view">
-    <header class="page-header hide-on-print">
-      <h1 class="ui-title">Коммерческая смета объекта</h1>
-      <p class="page-subtitle">Сводный расчет с разбивкой по участкам и авто-подтягиванием цен из БД</p>
-    </header>
+    <EstimateActionsPanel
+      :project-name="projectName"
+      :contractor-profile="contractorProfile"
+      :vat-rate="vatRate"
+      @update:projectName="projectName = $event"
+      @update:contractorProfile="contractorProfile = $event"
+      @update:vatRate="vatRate = $event"
+      @save="saveProject"
+      @load="openProjectLoadModal"
+      @exportProject="exportProjectFileAction"
+      @importProject="openProjectImportDialog"
+      @report="createReport"
+      @xlsx="exportXlsx"
+      @print="printEstimate"
+    />
 
-    <section class="controls-panel page-card hide-on-print">
-      <div class="db-controls-row">
-        <div class="calc-group project-group">
-          <label class="ui-label">Название проекта (для сохранения):</label>
-          <input
-            v-model="projectName"
-            type="text"
-            placeholder="Например: ТЦ Галактика, кровля"
-            class="ui-input"
-          />
-        </div>
+    <input
+      ref="projectImportInput"
+      type="file"
+      accept=".roofcalc,.json,application/json"
+      class="hidden-file-input"
+      @change="handleProjectImportFile"
+    />
 
-        <div class="calc-group vat-group">
-          <label class="ui-label">НДС (%):</label>
-          <input type="number" v-model.number="vatRate" min="0" max="100" class="ui-input" />
-        </div>
+    <Teleport to="body">
+      <div v-if="isProjectLoadOpen" class="load-modal-overlay hide-on-print">
+        <div class="load-modal-card page-card">
+          <div class="load-modal-header">
+            <div>
+              <h3 class="load-modal-title">Загрузить сохранённый расчёт</h3>
+              <p class="load-modal-subtitle">Выберите проект из базы. Текущая смета на экране будет заменена выбранной.</p>
+            </div>
+            <button class="load-modal-close" type="button" @click="closeProjectLoadModal">✕</button>
+          </div>
 
-        <div class="action-buttons">
-          <button @click="saveProject" class="ui-btn ui-btn-success">💾 Сохранить</button>
-          <button @click="loadProject" class="ui-btn ui-btn-primary">📂 Загрузить</button>
-          <button @click="createReport" class="ui-btn ui-btn-primary">📄 Создать отчет</button>
-          <button @click="exportXlsx" class="ui-btn ui-btn-primary">📊 XLSX</button>
-          <button @click="printEstimate" class="ui-btn ui-btn-secondary">🖨️ Печать</button>
+          <div v-if="isProjectLoadLoading" class="load-modal-empty ui-card-soft">
+            Загружаю список проектов...
+          </div>
+
+          <div v-else-if="!savedProjectsList.length" class="load-modal-empty ui-card-soft">
+            В базе пока нет сохранённых проектов. Сначала нажмите «Сохранить».
+          </div>
+
+          <div v-else class="saved-projects-list">
+            <button
+              v-for="project in savedProjectsList"
+              :key="project.id"
+              class="saved-project-row ui-card-soft"
+              type="button"
+              @click="selectSavedProject(project)"
+            >
+              <span class="saved-project-main">
+                <strong>{{ project.title || project.estimate?.projectName || 'Без названия' }}</strong>
+                <span>ID {{ project.id }}</span>
+              </span>
+              <span class="saved-project-meta">{{ formatProjectDate(project.created_at) }}</span>
+              <span class="saved-project-action">Открыть</span>
+            </button>
+          </div>
+
+          <div class="load-modal-footer">
+            <button class="ui-btn ui-btn-secondary" type="button" @click="closeProjectLoadModal">Отмена</button>
+            <button class="ui-btn ui-btn-secondary" type="button" @click="openProjectLoadModal">Обновить список</button>
+          </div>
         </div>
       </div>
-    </section>
+    </Teleport>
 
     <div class="estimate-body">
-      <div class="document-header-text page-card">
-        <strong>Общие суммарные данные по всем участкам:</strong><br />
-        Суммарная площадь кровель =
-        <span class="bold accent-text">{{ globalRoofParams.area.toFixed(2) }}</span> м2,<br />
-        Примыкания к парапету и верт. конструкциям =
-        <span class="bold accent-text">{{ globalRoofParams.perimeter.toFixed(2) }}</span> пог.м.,<br />
-        Водоотведение парапетное = {{ globalRoofParams.parapetDrains }} шт.,<br />
-        Водоотведение внутреннее = {{ globalRoofParams.innerDrains }} шт.,<br />
-        Аэраторы = {{ globalRoofParams.aerators }} шт.
-      </div>
+      <EstimateOverviewCard :roof-params="globalRoofParams" />
 
-      <div v-for="(zone, zIdx) in estimateZones" :key="zone.id" class="zone-block page-card">
-        <div class="zone-header">
-          <input v-model="zone.name" class="zone-title-input" placeholder="Название участка" />
+      <section class="estimate-search page-card hide-on-print">
+        <div class="search-row">
+          <div class="search-field">
+            <label class="ui-label">Поиск по смете</label>
+            <input
+              v-model="estimateSearchQuery"
+              class="ui-input"
+              type="search"
+              placeholder="Введите работу, материал, раздел или участок..."
+            />
+          </div>
 
-          <div class="zone-header-actions hide-on-print">
-            <button
-              v-if="zone.templateMeta?.systemCode"
-              @click="openEditPieModal(zone, zIdx)"
-              class="ui-btn ui-btn-secondary zone-edit-btn"
-              type="button"
-            >
-              ✏️ Редактировать пирог
-            </button>
-
-            <button
-              v-if="zone.templateMeta?.systemCode"
-              @click="openSystemEditor(zone.templateMeta?.systemCode)"
-              class="ui-btn ui-btn-secondary zone-edit-btn"
-              type="button"
-            >
-              ⚙️ Редактор системы
-            </button>
-
-            <button
-              @click="removeZone(zIdx)"
-              class="btn-icon danger-text"
-              title="Удалить участок"
-              type="button"
-            >
-              ✕
-            </button>
+          <div class="search-type">
+            <label class="ui-label">Где искать</label>
+            <select v-model="estimateSearchType" class="ui-select">
+              <option value="all">Везде</option>
+              <option value="work">Только работы</option>
+              <option value="material">Только материалы</option>
+            </select>
           </div>
         </div>
 
-        <div class="zone-params-block hide-on-print">
-          <div class="zone-params-title">Ввод параметров для этого участка (для формул):</div>
-
-          <div class="params-grid">
-            <div class="calc-group">
-              <label class="ui-label">Тип материалов</label>
-              <select v-model="zone.supplierType" @change="applySupplierToZone(zone)" class="ui-select zone-supplier-select">
-                <option value="ТехноНИКОЛЬ">ТехноНИКОЛЬ</option>
-                <option value="Аналог">Аналог</option>
-              </select>
-            </div>
-
-            <div class="calc-group">
-              <label class="ui-label">Площадь (S, м²)</label>
-              <input type="number" v-model.number="zone.roofParams.area" @input="recalculateVolumes" min="0" step="0.1" class="ui-input" />
-            </div>
-
-            <div class="calc-group">
-              <label class="ui-label">Периметр (P, пог.м)</label>
-              <input type="number" v-model.number="zone.roofParams.perimeter" @input="recalculateVolumes" min="0" step="0.1" class="ui-input" />
-            </div>
-
-            <div class="calc-group">
-              <label class="ui-label">Водоотвод (шт)</label>
-              <input type="number" v-model.number="zone.roofParams.parapetDrains" @input="recalculateVolumes" min="0" class="ui-input" />
-            </div>
-
-            <div class="calc-group">
-              <label class="ui-label">Воронки (ID, шт)</label>
-              <input type="number" v-model.number="zone.roofParams.innerDrains" @input="recalculateVolumes" min="0" class="ui-input" />
-            </div>
-
-            <div class="calc-group">
-              <label class="ui-label">Аэраторы (A, шт)</label>
-              <input type="number" v-model.number="zone.roofParams.aerators" @input="recalculateVolumes" min="0" class="ui-input" />
-            </div>
-
-            <div class="calc-group" v-for="(cp, pIdx) in zone.customParams" :key="'cp' + pIdx">
-              <label class="ui-label custom-param-label">
-                <span :title="cp.name">{{ cp.name }} ({{ cp.symbol }})</span>
-                <span
-                  @click="zone.customParams.splice(pIdx, 1); recalculateVolumes()"
-                  class="remove-param"
-                  title="Удалить переменную"
-                >
-                  ✕
-                </span>
-              </label>
-              <input
-                type="number"
-                v-model.number="cp.value"
-                @input="recalculateVolumes"
-                min="0"
-                step="0.1"
-                class="ui-input custom-param-input"
-              />
-            </div>
-          </div>
-
-          <div class="add-param-row">
-            <button @click="addCustomParam(zone)" class="btn-link-small">
-              + Добавить свою переменную для формул
-            </button>
-          </div>
-        </div>
-
-        <div v-for="(section, sIdx) in zone.sections" :key="section.id" class="section-block">
-          <div class="section-header">
-            <input v-model="section.title" class="section-title-input" placeholder="Название раздела" />
-            <button @click="removeSection(zone, sIdx)" class="btn-icon danger-text hide-on-print">✕</button>
-          </div>
-
-          <EstimateTable
-            title="Работы:"
-            type="work"
-            :items="section.works"
-            listId="works-list"
-            @changeName="onWorkNameChange($event, section, zone)"
-            @changeFormula="applyFormula"
-            @recalculate="recalculateVolumes"
-            @remove="removeWorkRow(section, $event)"
-            @add="addWork(section, zone)"
-          />
-
-          <EstimateTable
-            title="Материалы:"
-            type="material"
-            :items="section.materials"
-            listId="materials-list"
-            @changeName="onMaterialNameChange($event, section)"
-            @changeFormula="applyFormula"
-            @recalculate="recalculateVolumes"
-            @remove="removeMaterialRow(section, $event)"
-            @add="addMaterial(section, zone)"
-          />
-
-          <div class="section-total-row">
-            <span class="section-total-label">ИТОГО по Разделу:</span>
-            <span class="section-total-value">
-              {{ getSectionTotal(section).toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽
-            </span>
-          </div>
-        </div>
-
-        <div class="add-section-row hide-on-print">
-          <button @click="addSection(zone)" class="btn-outline">
-            + Добавить раздел в этот участок
+        <div v-if="estimateSearchQuery.trim()" class="search-results">
+          <button
+            v-for="result in estimateSearchResults"
+            :key="result.key"
+            type="button"
+            class="search-result"
+            @click="scrollToEstimateRow(result)"
+          >
+            <span class="result-type">{{ result.type === 'work' ? 'Работа' : 'Материал' }}</span>
+            <span class="result-name">{{ result.name }}</span>
+            <span class="result-path">{{ result.zoneName }} · {{ result.sectionTitle }}</span>
           </button>
+
+          <div v-if="!estimateSearchResults.length" class="search-empty">
+            Ничего не найдено по текущей смете.
+          </div>
         </div>
-      </div>
+      </section>
+
+      <EstimateZoneCard
+        v-for="(zone, zIdx) in estimateZones"
+        :key="zone.id"
+        :zone="zone"
+        :zone-index="zIdx"
+        :highlighted-row-id="highlightedSearchRowId"
+        :get-section-total="getSectionTotal"
+        @editPie="openEditPieModal"
+        @editSystem="openSystemEditor"
+        @removeZone="removeZone"
+        @recalculate="recalculateVolumes"
+        @changeWorkName="onWorkNameChange"
+        @changeMaterialName="onMaterialNameChange"
+        @changeFormula="applyFormula"
+        @removeWork="removeWorkRow"
+        @removeMaterial="removeMaterialRow"
+        @addWork="addWork"
+        @addMaterial="addMaterial"
+        @removeSection="removeSection"
+        @addSection="addSection"
+        @addCustomParam="addCustomParam"
+      />
 
       <div class="add-zone-row hide-on-print">
         <button @click="addZone" class="ui-btn ui-btn-primary btn-large">+ Добавить пустой участок</button>
@@ -199,7 +145,7 @@
           </button>
 
           <transition name="fade">
-            <div class="dropdown-menu" v-if="isTemplateDropdownOpen">
+            <div v-if="isTemplateDropdownOpen" class="dropdown-menu">
               <div v-if="savedTemplatesDb.length === 0" class="dropdown-empty">Шаблоны не найдены</div>
 
               <div
@@ -216,78 +162,37 @@
         </div>
       </div>
 
-      <section class="grand-totals page-card">
-        <div class="summary-line">
-          <span>Сумма по разделам (Монтажные работы):</span>
-          <span class="bold">{{ grandTotalWorks.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
+      <EstimateTotalsCard
+        :overhead-expenses="overheadExpenses"
+        :works-db="worksDb"
+        :pricing-area="globalRoofParams.area"
+        :grand-total-works="grandTotalWorks"
+        :grand-total-materials="grandTotalMaterials"
+        :total-expenses="totalExpenses"
+        :sub-total-without-vat="subTotalWithoutVat"
+        :vat-amount="vatAmount"
+        :final-grand-total-with-vat="finalGrandTotalWithVat"
+        :vat-rate="vatRate"
+        @addExpense="addExpense"
+        @removeExpense="removeExpense"
+      />
+
+      <section class="bottom-actions page-card hide-on-print">
+        <div>
+          <h3 class="bottom-actions-title">Сохранение и выгрузка</h3>
+          <p class="bottom-actions-text">
+            Главные действия продублированы здесь, чтобы не возвращаться наверх после длинной сметы.
+          </p>
         </div>
 
-        <div class="summary-line">
-          <span>Сумма по разделам (Материалы):</span>
-          <span class="bold">{{ grandTotalMaterials.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
-        </div>
-
-        <div class="expenses-block mt-4">
-          <h3 class="expenses-title">Накладные, транспортные и утилизационные расходы:</h3>
-
-          <table class="expenses-table">
-            <tbody>
-              <tr v-for="(exp, eIdx) in overheadExpenses" :key="eIdx">
-                <td>
-                  <input
-                    v-model="exp.name"
-                    list="works-list"
-                    class="expense-input text-left"
-                    placeholder="Название расхода"
-                    autocomplete="off"
-                  />
-                </td>
-                <td class="col-unit center">
-                  <input v-model="exp.unit" class="expense-input center" />
-                </td>
-                <td class="col-qty right">
-                  <input type="number" v-model.number="exp.qty" class="expense-input right" />
-                </td>
-                <td class="col-price right">
-                  <input type="number" v-model.number="exp.price" class="expense-input right" />
-                </td>
-                <td class="col-sum right bold">
-                  {{ (exp.qty * exp.price).toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽
-                </td>
-                <td class="col-action center hide-on-print">
-                  <button @click="overheadExpenses.splice(eIdx, 1)" class="btn-icon">🗑️</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <button @click="addExpense" class="btn-text-dashed hide-on-print mt-2">
-            + Добавить накладной расход
-          </button>
-
-          <div class="subtotal-row mt-2">
-            <span class="subtotal-label">Сумма накладных расходов:</span>
-            <span class="subtotal-value">
-              {{ totalExpenses.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽
-            </span>
-          </div>
-        </div>
-
-        <div class="totals-summary-block">
-          <div class="summary-line highlight-line">
-            <span>ИТОГО БЕЗ НДС:</span>
-            <span class="bold">{{ subTotalWithoutVat.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
-          </div>
-
-          <div class="summary-line muted-line">
-            <span>В том числе НДС ({{ vatRate }}%):</span>
-            <span>{{ vatAmount.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
-          </div>
-
-          <div class="final-grand-total">
-            <span>ВСЕГО К ОПЛАТЕ (С НДС):</span>
-            <span>{{ finalGrandTotalWithVat.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) }} ₽</span>
-          </div>
+        <div class="bottom-actions-buttons">
+          <button @click="saveProject" class="ui-btn ui-btn-success">Сохранить</button>
+          <button @click="openProjectLoadModal" class="ui-btn ui-btn-primary">Загрузить из базы</button>
+          <button @click="exportProjectFileAction" class="ui-btn ui-btn-secondary">Сохранить файлом</button>
+          <button @click="openProjectImportDialog" class="ui-btn ui-btn-secondary">Открыть файл</button>
+          <button @click="createReport" class="ui-btn ui-btn-primary">Создать отчет</button>
+          <button @click="exportXlsx" class="ui-btn ui-btn-primary">Выгрузить XLSX</button>
+          <button @click="scrollToTop" class="ui-btn ui-btn-secondary">Наверх</button>
         </div>
       </section>
     </div>
@@ -296,10 +201,12 @@
       :is-open="isEditOptionsOpen"
       :system="editPieSystem"
       :selected-keys="editPieSelectedKeys"
+      :option-order="editPieOptionOrder"
       title="Редактирование пирога · шаг 1"
-      continue-label="Далее"
-      cancel-label="Отмена"
+      continue-label="Вперед"
+      cancel-label="Назад на 1 шаг"
       @close="closeEditFlow"
+      @order-change="handleEditOptionsOrderChange"
       @continue="handleEditOptionsContinue"
     />
 
@@ -310,7 +217,7 @@
       :initial-values="editPieParamValues"
       title="Редактирование пирога · шаг 2"
       submit-label="Применить"
-      back-label="Назад"
+      back-label="Назад на 1 шаг"
       @close="closeEditFlow"
       @back="backToEditOptions"
       @submit="applyEditPieModal"
@@ -333,39 +240,25 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useCalculator } from '@/modules/calculator/useCalculator'
-import EstimateTable from '../components/EstimateTable.vue'
-import TemplateOptionsModal from '../components/TemplateOptionsModal.vue'
-import TemplateParamsModal from '../components/TemplateParamsModal.vue'
-import { applyPendingGeneratedEstimate, buildEstimateFromSystem } from '@/modules/templates/buildEstimate'
-import { getSystemTemplate } from '@/core/services/dataApi'
+import TemplateOptionsModal from '@/components/TemplateOptionsModal.vue'
+import TemplateParamsModal from '@/components/TemplateParamsModal.vue'
 import { toSystemTemplateView } from '@/core/adapters/viewAdapters'
+import { getSystemTemplate } from '@/core/services/dataApi'
+import EstimateActionsPanel from '@/features/estimate/components/EstimateActionsPanel.vue'
+import EstimateOverviewCard from '@/features/estimate/components/EstimateOverviewCard.vue'
+import EstimateTotalsCard from '@/features/estimate/components/EstimateTotalsCard.vue'
+import EstimateZoneCard from '@/features/estimate/components/EstimateZoneCard.vue'
+import { useCalculator } from '@/modules/calculator/useCalculator'
+import { applyPendingGeneratedEstimate, buildEstimateFromSystem } from '@/modules/templates/buildEstimate'
 
 const router = useRouter()
-
-function createReport() {
-  const html = generateSmartPirReport()
-  if (!html) {
-    window.alert('Не удалось сформировать отчёт.')
-    return
-  }
-
-  router.push('/report/smartpir')
-}
-
-async function exportXlsx() {
-  try {
-    await generateSmartPirReportXlsx()
-  } catch (error) {
-    console.error(error)
-    window.alert('Не удалось экспортировать XLSX-отчёт.')
-  }
-}
+const CALCULATOR_DRAFT_KEY = 'eco-roof-calculator-draft-v1'
 
 const {
   projectName,
+  contractorProfile,
   vatRate,
   estimateZones,
   overheadExpenses,
@@ -376,7 +269,6 @@ const {
   isTemplateDropdownOpen,
   dropdownRef,
   selectTemplate,
-  applySupplierToZone,
   globalRoofParams,
   loadDatabases,
   unloadDatabases,
@@ -385,7 +277,12 @@ const {
   applyFormula,
   recalculateVolumes,
   saveProject,
-  loadProject,
+  getSavedProjects,
+  loadProjectById,
+  getCurrentEditableProjectPayload,
+  restoreProjectPayload,
+  exportProjectFile,
+  importProjectFile,
   addZone,
   removeZone,
   addSection,
@@ -411,20 +308,243 @@ const isEditParamsOpen = ref(false)
 const editPieZoneIndex = ref(null)
 const editPieSystem = ref(null)
 const editPieSelectedKeys = ref([])
+const editPieOptionOrder = ref([])
 const editPieParamValues = ref({})
+const estimateSearchQuery = ref('')
+const estimateSearchType = ref('all')
+const highlightedSearchRowId = ref('')
+const projectImportInput = ref(null)
+const isProjectLoadOpen = ref(false)
+const isProjectLoadLoading = ref(false)
+const savedProjectsList = ref([])
+const isDraftAutosaveReady = ref(false)
+let draftSaveTimer = null
+
+const estimateSearchResults = computed(() => {
+  const query = normalizeSearchText(estimateSearchQuery.value)
+  if (!query) return []
+
+  const tokens = query.split(' ').filter(Boolean)
+  const results = []
+
+  for (const zone of estimateZones.value || []) {
+    for (const section of zone.sections || []) {
+      for (const item of section.works || []) {
+        pushSearchResult(results, { type: 'work', item, zone, section, tokens })
+      }
+
+      for (const item of section.materials || []) {
+        pushSearchResult(results, { type: 'material', item, zone, section, tokens })
+      }
+    }
+  }
+
+  return results.slice(0, 40)
+})
+
+function showActionError(message, error) {
+  console.error(error)
+  window.alert(message)
+}
+
+function normalizeSearchText(value) {
+  return `${value || ''}`.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function pushSearchResult(results, { type, item, zone, section, tokens }) {
+  if (estimateSearchType.value !== 'all' && estimateSearchType.value !== type) return
+
+  const haystack = normalizeSearchText([
+    item?.name,
+    item?.code,
+    item?.itemCode,
+    item?.unit,
+    section?.title,
+    zone?.name
+  ].filter(Boolean).join(' '))
+
+  if (!tokens.every((token) => haystack.includes(token))) return
+
+  const rowId = `${item?.id || item?.key || item?.code || ''}`
+  if (!rowId) return
+
+  results.push({
+    key: `${type}-${rowId}`,
+    type,
+    rowId,
+    name: item?.name || 'Без названия',
+    zoneName: zone?.name || 'Участок',
+    sectionTitle: section?.title || 'Раздел'
+  })
+}
+
+function scrollToEstimateRow(result) {
+  highlightedSearchRowId.value = result.rowId
+  const rowId = `${result.rowId}`.replace(/"/g, '\\"')
+  const el = document.querySelector(`[data-estimate-row-id="${rowId}"]`)
+
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+  }
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function createReport() {
+  const html = generateSmartPirReport()
+  if (!html) {
+    window.alert('Не удалось сформировать отчёт.')
+    return
+  }
+
+  router.push('/report/smartpir')
+}
+
+async function exportXlsx() {
+  try {
+    const savedPath = await generateSmartPirReportXlsx()
+    if (savedPath) {
+      window.alert(`XLSX выгружен: ${savedPath}`)
+    }
+  } catch (error) {
+    console.error(error)
+    window.alert('Не удалось экспортировать XLSX-отчёт.')
+  }
+}
+
+async function exportProjectFileAction() {
+  const savedPath = await exportProjectFile()
+  if (savedPath) {
+    window.alert(`Файл расчёта сохранён: ${savedPath}\n\nЕго можно открыть на другом ПК через кнопку «Открыть файл».`)
+  }
+}
+
+async function openProjectLoadModal() {
+  isProjectLoadOpen.value = true
+  isProjectLoadLoading.value = true
+
+  try {
+    savedProjectsList.value = await getSavedProjects()
+  } catch (error) {
+    showActionError('Не удалось получить список сохранённых проектов.', error)
+    savedProjectsList.value = []
+    isProjectLoadOpen.value = false
+  } finally {
+    isProjectLoadLoading.value = false
+  }
+}
+
+function closeProjectLoadModal() {
+  isProjectLoadOpen.value = false
+}
+
+async function selectSavedProject(project) {
+  if (!project?.id) return
+
+  try {
+    const normalized = await loadProjectById(project.id)
+    closeProjectLoadModal()
+    window.alert(`Загружен проект: ${normalized.projectName}`)
+  } catch (error) {
+    showActionError('Не удалось загрузить выбранный проект.', error)
+  }
+}
+
+function formatProjectDate(value) {
+  if (!value) return 'Дата не указана'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return `${value}`
+
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function cloneForDraft(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
+function buildDraftPayload() {
+  return {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    estimate: cloneForDraft(getCurrentEditableProjectPayload())
+  }
+}
+
+function saveCalculatorDraftNow() {
+  if (!isDraftAutosaveReady.value) return
+
+  try {
+    localStorage.setItem(CALCULATOR_DRAFT_KEY, JSON.stringify(buildDraftPayload()))
+  } catch (error) {
+    console.warn('Не удалось сохранить черновик расчёта.', error)
+  }
+}
+
+function scheduleCalculatorDraftSave() {
+  if (!isDraftAutosaveReady.value) return
+
+  clearTimeout(draftSaveTimer)
+  draftSaveTimer = setTimeout(saveCalculatorDraftNow, 350)
+}
+
+function restoreCalculatorDraft() {
+  try {
+    const raw = localStorage.getItem(CALCULATOR_DRAFT_KEY)
+    if (!raw) return false
+
+    const parsed = JSON.parse(raw)
+    const estimate = parsed?.estimate || parsed
+    if (!estimate) return false
+
+    restoreProjectPayload(estimate)
+    return true
+  } catch (error) {
+    console.warn('Не удалось восстановить черновик расчёта.', error)
+    localStorage.removeItem(CALCULATOR_DRAFT_KEY)
+    return false
+  }
+}
+
+function openProjectImportDialog() {
+  projectImportInput.value?.click()
+}
+
+async function handleProjectImportFile(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  const loadedName = await importProjectFile(file)
+  if (loadedName) {
+    window.alert(`Расчёт открыт: ${loadedName}`)
+  }
+}
 
 async function openEditPieModal(zone, zoneIndex) {
-  const meta = zone?.templateMeta
-  if (!meta?.systemCode) return
+  try {
+    const meta = zone?.templateMeta
+    if (!meta?.systemCode) return
 
-  const system = await getSystemTemplate(meta.systemCode)
-  if (!system) return
+    const system = await getSystemTemplate(meta.systemCode)
+    if (!system) return
 
-  editPieSystem.value = toSystemTemplateView(system)
-  editPieZoneIndex.value = zoneIndex
-  editPieSelectedKeys.value = Array.isArray(meta.selectedKeys) ? [...meta.selectedKeys] : []
-  editPieParamValues.value = { ...(meta.paramValues || {}) }
-  isEditOptionsOpen.value = true
+    editPieSystem.value = toSystemTemplateView(system)
+    editPieZoneIndex.value = zoneIndex
+    editPieSelectedKeys.value = Array.isArray(meta.selectedKeys) ? [...meta.selectedKeys] : []
+    editPieOptionOrder.value = Array.isArray(meta.optionOrder) ? [...meta.optionOrder] : [...editPieSelectedKeys.value]
+    editPieParamValues.value = { ...(meta.paramValues || {}) }
+    isEditOptionsOpen.value = true
+  } catch (error) {
+    showActionError('Не удалось открыть редактирование пирога.', error)
+  }
 }
 
 function openSystemEditor(systemCode) {
@@ -442,16 +562,28 @@ function removeMaterialRow(section, index) {
   recalculateVolumes()
 }
 
+function removeExpense(index) {
+  overheadExpenses.value.splice(index, 1)
+}
+
 function closeEditFlow() {
   isEditOptionsOpen.value = false
   isEditParamsOpen.value = false
   editPieZoneIndex.value = null
   editPieSystem.value = null
   editPieSelectedKeys.value = []
+  editPieOptionOrder.value = []
   editPieParamValues.value = {}
 }
 
-function handleEditOptionsContinue(keys) {
+function handleEditOptionsOrderChange(order) {
+  editPieOptionOrder.value = Array.isArray(order) ? [...order] : []
+}
+
+function handleEditOptionsContinue(keys, order = []) {
+  if (Array.isArray(order) && order.length) {
+    handleEditOptionsOrderChange(order)
+  }
   editPieSelectedKeys.value = [...keys]
   isEditOptionsOpen.value = false
   isEditParamsOpen.value = true
@@ -463,113 +595,207 @@ function backToEditOptions() {
 }
 
 async function applyEditPieModal(values) {
-  if (editPieZoneIndex.value === null || !editPieSystem.value) return
+  try {
+    if (editPieZoneIndex.value === null || !editPieSystem.value) return
 
-  editPieParamValues.value = { ...(values || {}) }
+    editPieParamValues.value = { ...(values || {}) }
 
-  const rebuilt = await buildEstimateFromSystem(
-    editPieSystem.value,
-    editPieSelectedKeys.value,
-    editPieParamValues.value
-  )
+    const rebuilt = await buildEstimateFromSystem(
+      editPieSystem.value,
+      editPieSelectedKeys.value,
+      editPieParamValues.value,
+      { optionOrder: editPieOptionOrder.value }
+    )
 
-  const newZone = rebuilt?.estimateZones?.[0]
-  if (!newZone) {
+    const newZone = rebuilt?.estimateZones?.[0]
+    if (!newZone) {
+      closeEditFlow()
+      return
+    }
+
+    const currentZone = estimateZones.value[editPieZoneIndex.value]
+    if (!currentZone) {
+      closeEditFlow()
+      return
+    }
+
+    currentZone.sections = newZone.sections || []
+    currentZone.roofParams = newZone.roofParams || currentZone.roofParams
+    currentZone.customParams = newZone.customParams || []
+    currentZone.templateMeta = newZone.templateMeta || null
+
+    if (!currentZone.name || currentZone.name.startsWith('Монтаж системы:')) {
+      currentZone.name = newZone.name || currentZone.name
+    }
+
+    recalculateVolumes()
     closeEditFlow()
-    return
+  } catch (error) {
+    showActionError('Не удалось применить изменения пирога.', error)
   }
-
-  const currentZone = estimateZones.value[editPieZoneIndex.value]
-  if (!currentZone) {
-    closeEditFlow()
-    return
-  }
-
-  currentZone.sections = newZone.sections || []
-  currentZone.roofParams = newZone.roofParams || currentZone.roofParams
-  currentZone.customParams = newZone.customParams || []
-  currentZone.templateMeta = newZone.templateMeta || null
-
-  if (!currentZone.name || currentZone.name.startsWith('Монтаж системы:')) {
-    currentZone.name = newZone.name || currentZone.name
-  }
-
-  recalculateVolumes()
-  closeEditFlow()
 }
+
+watch(
+  () => [
+    projectName.value,
+    contractorProfile.value,
+    vatRate.value,
+    estimateZones.value,
+    overheadExpenses.value
+  ],
+  scheduleCalculatorDraftSave,
+  { deep: true }
+)
 
 onMounted(async () => {
   await loadDatabases()
 
-  applyPendingGeneratedEstimate({
+  const appliedPendingEstimate = applyPendingGeneratedEstimate({
     projectName,
+    contractorProfile,
     vatRate,
     estimateZones,
+    overheadExpenses,
     recalculateVolumes
   })
+
+  if (!appliedPendingEstimate) {
+    restoreCalculatorDraft()
+  }
+
+  recalculateVolumes()
+  isDraftAutosaveReady.value = true
+  saveCalculatorDraftNow()
 })
 
 onUnmounted(() => {
+  clearTimeout(draftSaveTimer)
+  saveCalculatorDraftNow()
   unloadDatabases()
 })
 </script>
 
 <style scoped>
 .calculator-view {
-  max-width: 80%;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 20px;
 }
 
-.page-header {
-  margin-bottom: 24px;
+.hidden-file-input {
+  display: none;
 }
 
-.page-subtitle {
-  text-align: center;
-  color: var(--text-soft);
-  margin-top: 10px;
-  font-size: 15px;
-}
-
-.ui-title {
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.controls-panel {
-  padding: 20px;
-  margin-bottom: 24px;
-}
-
-.db-controls-row {
+.load-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.load-modal-card {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 20px;
+}
+
+.load-modal-header,
+.load-modal-footer {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 20px;
+  gap: 14px;
 }
 
-.project-group {
-  flex: 3;
+.load-modal-header {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.vat-group {
-  flex: 1;
-  max-width: 150px;
+.load-modal-title {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 22px;
 }
 
-.calc-group {
+.load-modal-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+}
+
+.load-modal-close {
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.load-modal-empty {
+  padding: 18px;
+  color: var(--text-soft);
+}
+
+.saved-projects-list {
+  display: grid;
+  gap: 10px;
+  max-height: 52vh;
+  overflow: auto;
+}
+
+.saved-project-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  padding: 14px;
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+}
+
+.saved-project-row:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.saved-project-main {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+  gap: 4px;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.saved-project-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-project-main span,
+.saved-project-meta {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.saved-project-action {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.load-modal-footer {
+  margin-top: 16px;
+  justify-content: flex-end;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color);
 }
 
 .estimate-body {
@@ -578,177 +804,74 @@ onUnmounted(() => {
   gap: 28px;
 }
 
-.document-header-text {
-  padding: 20px;
-  border-left: 5px solid var(--accent);
-  font-size: 1.05rem;
-  line-height: 1.7;
-  border-radius: 0 12px 12px 0;
+.estimate-search {
+  padding: 18px;
 }
 
-.accent-text {
-  color: var(--accent);
-  font-family: monospace;
-  font-weight: 800;
+.search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 14px;
+  align-items: end;
 }
 
-.zone-block {
-  overflow: hidden;
-}
-
-.zone-header {
+.search-field,
+.search-type {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.search-results {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.search-result {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) minmax(180px, 0.55fr);
+  gap: 10px;
   align-items: center;
-  background: var(--bg-card-soft);
-  padding: 14px 20px;
-  gap: 15px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.zone-title-input {
-  flex: 1;
-  background: var(--bg-input);
   border: 1px solid var(--border-color);
-  color: #111827;
-  font-size: 1.1rem;
-  font-weight: 700;
-  height: 42px;
-  padding: 0 15px;
-  border-radius: 8px;
-  outline: none;
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--text-main);
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
 }
 
-.zone-title-input:focus {
+.search-result:hover {
   border-color: var(--accent);
+  background: var(--bg-hover);
 }
 
-.zone-params-block {
-  background: var(--bg-card-soft);
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.zone-params-title {
-  font-weight: 700;
-  margin-bottom: 14px;
-  color: var(--text-soft);
-  font-size: 0.9rem;
+.result-type {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 12px;
   text-transform: uppercase;
 }
 
-.params-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 18px;
-  align-items: flex-start;
-}
-
-.zone-supplier-select {
+.result-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 700;
 }
 
-.section-block {
-  padding: 20px;
-}
-
-.section-header {
-  margin-bottom: 18px;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 10px;
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-}
-
-.section-title-input {
-  font-size: 1.15rem;
-  font-weight: 800;
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 0;
-  background: transparent;
-  width: 70%;
-  color: var(--text-main);
-  outline: none;
-}
-
-.section-title-input:focus {
-  border-bottom-color: var(--accent);
-}
-
-.section-total-row {
-  text-align: right;
-  padding: 16px 0 0;
-  font-size: 1.1rem;
-  font-weight: 800;
-  border-top: 1px solid var(--border-color);
-  margin-top: 16px;
-  color: var(--text-main);
-}
-
-.add-section-row {
-  padding: 0 20px 20px;
-}
-
-.btn-outline {
-  background: transparent;
-  border: 2px dashed var(--accent);
-  color: var(--accent);
-  width: 100%;
-  margin-top: 4px;
-  padding: 12px 16px;
-  border-radius: 10px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
-  font-size: 1rem;
-}
-
-.btn-outline:hover {
-  background: var(--accent-soft);
-}
-
-.btn-icon {
-  opacity: 0.75;
-  transition: transform var(--transition-fast), opacity var(--transition-fast), color var(--transition-fast);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.2rem;
-  padding: 0;
+.result-path,
+.search-empty {
   color: var(--text-soft);
+  font-size: 13px;
 }
 
-.btn-icon:hover {
-  opacity: 1;
-  transform: scale(1.15);
-  color: var(--danger);
-}
-
-.danger-text {
-  color: var(--danger);
-}
-
-.center {
-  text-align: center;
-}
-
-.right {
-  text-align: right;
-}
-
-.bold {
-  font-weight: 700;
-}
-
-.mt-2 {
-  margin-top: 0.5rem;
-}
-
-.mt-4 {
-  margin-top: 2rem;
+.search-empty {
+  padding: 12px;
 }
 
 .add-zone-row {
@@ -758,6 +881,32 @@ onUnmounted(() => {
   margin: 8px 0 24px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.bottom-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 20px;
+  border: 2px solid var(--accent);
+}
+
+.bottom-actions-title {
+  margin: 0 0 6px;
+  color: var(--text-main);
+}
+
+.bottom-actions-text {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.bottom-actions-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .btn-large {
@@ -851,231 +1000,32 @@ onUnmounted(() => {
   transform: translateY(-10px);
 }
 
-.grand-totals {
-  padding: 28px;
-  border: 2px solid var(--accent);
-}
-
-.summary-line {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  font-size: 1.05rem;
-  gap: 16px;
-}
-
-.expenses-title {
-  margin: 0 0 16px;
-  color: var(--text-main);
-}
-
-.expenses-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 12px;
-}
-
-.expenses-table td {
-  border: 1px solid var(--border-color);
-  padding: 0;
-  height: 45px;
-  vertical-align: middle;
-}
-
-.expense-input {
-  width: 100%;
-  height: 44px;
-  border: none;
-  background: transparent;
-  padding: 0 12px;
-  box-sizing: border-box;
-  color: var(--text-main);
-  outline: none;
-}
-
-.expense-input:focus {
-  background: var(--bg-hover);
-  box-shadow: inset 0 0 0 2px var(--accent);
-}
-
-.col-unit {
-  width: 80px;
-}
-
-.col-qty {
-  width: 100px;
-}
-
-.col-price {
-  width: 130px;
-}
-
-.col-sum {
-  width: 150px;
-}
-
-.col-action {
-  width: 50px;
-  border: none !important;
-}
-
-.btn-text-dashed {
-  background: transparent;
-  border: 2px dashed var(--border-strong);
-  color: var(--text-soft);
-  font-weight: 700;
-  cursor: pointer;
-  padding: 10px 14px;
-  font-size: 0.95rem;
-  border-radius: 10px;
-  display: block;
-  width: 100%;
-  text-align: center;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.btn-text-dashed:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.subtotal-row {
-  text-align: right;
-  padding: 12px 0 0;
-  border-top: 1px solid var(--border-color);
-}
-
-.subtotal-label {
-  margin-right: 1rem;
-  color: var(--text-soft);
-}
-
-.subtotal-value {
-  font-weight: 700;
-  min-width: 150px;
-  display: inline-block;
-  color: var(--text-main);
-}
-
-.totals-summary-block {
-  background: var(--bg-card-soft);
-  padding: 20px;
-  border-radius: 12px;
-  margin-top: 24px;
-  border: 1px solid var(--border-color);
-}
-
-.highlight-line {
-  border-top: 1px solid var(--border-color);
-  padding-top: 18px;
-  margin-top: 10px;
-  font-size: 1.2rem;
-  font-weight: 800;
-}
-
-.muted-line {
-  color: var(--text-soft);
-  font-size: 1rem;
-}
-
-.final-grand-total {
-  display: flex;
-  justify-content: space-between;
-  font-size: 1.6rem;
-  font-weight: 900;
-  color: var(--accent);
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 2px solid var(--border-color);
-  gap: 16px;
-}
-
-.add-param-row {
-  margin-top: 14px;
-  text-align: right;
-}
-
-.btn-link-small {
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-size: 0.9rem;
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: underline;
-  transition: color var(--transition-fast);
-}
-
-.btn-link-small:hover {
-  color: var(--accent-hover);
-}
-
-.custom-param-label {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.remove-param {
-  color: var(--danger);
-  cursor: pointer;
-  font-size: 0.9rem;
-  margin-left: 5px;
-}
-
-.remove-param:hover {
-  font-weight: 700;
-}
-
 @media (max-width: 900px) {
   .calculator-view {
     padding: 16px;
   }
 
-  .db-controls-row {
+  .search-row,
+  .search-result,
+  .saved-project-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bottom-actions {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .project-group,
-  .vat-group {
-    flex: none;
-    max-width: none;
+  .bottom-actions-buttons {
+    justify-content: stretch;
   }
 
-  .action-buttons {
-    width: 100%;
-  }
-
-  .action-buttons > * {
+  .bottom-actions-buttons > * {
     flex: 1 1 auto;
-  }
-
-  .zone-header,
-  .section-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .section-title-input {
-    width: 100%;
-  }
-
-  .summary-line,
-  .final-grand-total {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 
 @media print {
-  .hide-on-print {
-    display: none !important;
-  }
-
   .calculator-view {
     padding: 0;
     max-width: 100%;
@@ -1083,84 +1033,55 @@ onUnmounted(() => {
     background: #fff;
   }
 
-  .page-card,
-  .zone-block,
-  .grand-totals,
-  .document-header-text,
-  .totals-summary-block {
+  :deep(.page-card),
+  :deep(.zone-block),
+  :deep(.grand-totals),
+  :deep(.document-header-text),
+  :deep(.totals-summary-block) {
     background: #fff !important;
     color: #000 !important;
     box-shadow: none !important;
   }
 
-  .zone-block {
+  :deep(.zone-block) {
     border: 2px solid #000 !important;
     margin-bottom: 20px;
     page-break-inside: avoid;
   }
 
-  .zone-header {
+  :deep(.zone-header) {
     background: #eee !important;
     border-bottom: 2px solid #000 !important;
   }
 
-  .zone-title-input,
-  .section-title-input,
-  .expense-input {
+  :deep(.zone-title-input),
+  :deep(.section-title-input),
+  :deep(.expense-input) {
     color: #000 !important;
   }
 
-  .expenses-table td {
+  :deep(.expenses-table td) {
     border: 1px solid #000 !important;
     color: #000 !important;
   }
 
-  .final-grand-total {
+  :deep(.final-grand-total) {
     color: #000 !important;
     border-top: 4px solid #000 !important;
   }
 
-  .totals-summary-block {
+  :deep(.totals-summary-block) {
     border: none !important;
     padding: 0 !important;
     margin-top: 1rem !important;
   }
 
-  .accent-text {
+  :deep(.accent-text) {
     color: #000 !important;
   }
 
-  .grand-totals {
+  :deep(.grand-totals) {
     border-color: #000 !important;
   }
 }
-
-input[type='number']::-webkit-outer-spin-button,
-input[type='number']::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-input[type='number'] {
-  -moz-appearance: textfield;
-}
-
-input::-webkit-calendar-picker-indicator {
-  display: none !important;
-}
-
-input::-webkit-list-button {
-  display: none !important;
-}
-
-.zone-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.zone-edit-btn {
-  white-space: nowrap;
-}
-
 </style>

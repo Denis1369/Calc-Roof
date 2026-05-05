@@ -115,8 +115,172 @@ function normalizeOwnerKeys(ownerKeys = []) {
   return [...new Set((Array.isArray(ownerKeys) ? ownerKeys : []).map(canonicalizeOptionKey).filter(Boolean))]
 }
 
+function normalizeParamKeys(keys = []) {
+  const list = Array.isArray(keys) ? keys : [keys]
+  return [...new Set(list.map((item) => `${item || ''}`.trim()).filter(Boolean))]
+}
+
 function getParamIdentity(param = {}) {
   return `${normalize(param?.key)} ${normalize(param?.label)} ${normalize(param?.description)}`
+}
+
+const PARAM_SEMANTIC_KEY_ALIASES = {
+  inner_drain_count: 'inner_drains_count',
+  internal_drains_count: 'inner_drains_count',
+  outer_drain_count: 'outer_drains_count',
+  external_drains_count: 'outer_drains_count',
+  aerator_count: 'aerators_count',
+  smoke_hatch_count: 'smoke_hatches_count',
+  pass_general_count: 'pass_through_count',
+  pass_medium_count: 'pass_through_medium_count',
+  pass_small_count: 'pass_through_small_count',
+  fire_break_area: 'noncombustible_fill_area',
+  ac_stand_count: 'condenser_support_count'
+}
+
+const PARAM_SEMANTIC_META = {
+  inner_drains_count: {
+    label: 'Количество внутренних воронок',
+    group: 'drainage',
+    unit: 'шт',
+    description: 'Количество внутренних водоприемных воронок'
+  },
+  outer_drains_count: {
+    label: 'Количество внешних воронок',
+    group: 'drainage',
+    unit: 'шт',
+    description: 'Количество внешних воронок или элементов наружного водоотведения'
+  },
+  aerators_count: {
+    label: 'Количество аэраторов',
+    group: 'drainage',
+    unit: 'шт',
+    description: 'Количество кровельных аэраторов'
+  },
+  guardrail_length: {
+    label: 'Кровельное ограждение',
+    group: 'safety',
+    unit: 'м/п',
+    description: 'Длина ограждающей конструкции'
+  },
+  guardrail_post_count: {
+    label: 'Стойки ограждения',
+    group: 'safety',
+    unit: 'шт',
+    description: 'Количество стоек ограждения'
+  },
+  smoke_hatches_count: {
+    label: 'Люки дымоудаления',
+    group: 'engineering',
+    unit: 'шт',
+    description: 'Количество люков дымоудаления или зенитных фонарей'
+  },
+  condenser_support_count: {
+    label: 'Стойки блоков кондиционеров',
+    group: 'engineering',
+    unit: 'шт',
+    description: 'Количество примыканий к стойкам блоков кондиционеров'
+  },
+  pass_through_count: {
+    label: 'Прочие проходки',
+    group: 'engineering',
+    unit: 'шт',
+    description: 'Общее количество проходок через кровлю'
+  },
+  pass_through_small_count: {
+    label: 'Проходки малого сечения',
+    group: 'engineering',
+    unit: 'шт',
+    description: 'd=10-80 мм: гусаки, малые трубы и выводы'
+  },
+  pass_through_medium_count: {
+    label: 'Проходки среднего сечения',
+    group: 'engineering',
+    unit: 'шт',
+    description: 'd=80-300 мм: дефлекторы, круглые трубы'
+  },
+  noncombustible_fill_area: {
+    label: 'Негорючий защитный материал',
+    group: 'engineering',
+    unit: 'м2',
+    description: 'Площадь противопожарных рассечек или защитного материала NG'
+  }
+}
+
+function getParamSemanticKey(param = {}) {
+  const normalizedKey = canonicalizeOptionKey(param?.key || '')
+  const identity = getParamIdentity(param)
+
+  if (PARAM_SEMANTIC_KEY_ALIASES[normalizedKey]) {
+    return PARAM_SEMANTIC_KEY_ALIASES[normalizedKey]
+  }
+
+  if (/внутрен.*ворон|inner.*drain/.test(identity)) return 'inner_drains_count'
+  if (/внешн.*ворон|наружн.*водоотвед|outer.*drain/.test(identity)) return 'outer_drains_count'
+  if (/аэратор|aerator/.test(identity)) return 'aerators_count'
+  if (/люк.*дымоудален|smoke.*hatch/.test(identity)) return 'smoke_hatches_count'
+  if (/стойк.*огражден|guardrail.*post/.test(identity)) return 'guardrail_post_count'
+  if (
+    (/огражден|guardrail|roof.*fenc/.test(identity)) &&
+    !/стойк/.test(identity)
+  ) {
+    return 'guardrail_length'
+  }
+  if (/стойк.*кондиционер|блок.*кондиционер|condenser|ac.*stand/.test(identity)) return 'condenser_support_count'
+  if (/проходк.*малого|small.*penetration/.test(identity)) return 'pass_through_small_count'
+  if (/проходк.*среднего|medium.*penetration/.test(identity)) return 'pass_through_medium_count'
+  if (
+    (/проч.*проход|общее.*проход|pass.*through|penetration/.test(identity)) &&
+    !/малого|среднего/.test(identity)
+  ) {
+    return 'pass_through_count'
+  }
+  if (/противопожар|негорюч|fire.*break|fire.*protection/.test(identity)) return 'noncombustible_fill_area'
+
+  return normalizedKey || `${param?.key || ''}`.trim()
+}
+
+function applySemanticMeta(param = {}, semanticKey = '') {
+  const meta = PARAM_SEMANTIC_META[semanticKey]
+  if (!meta) return param
+  return {
+    ...param,
+    ...meta
+  }
+}
+
+function mergeEquivalentParams(params = []) {
+  const map = new Map()
+
+  for (const item of params) {
+    if (!item?.key) continue
+
+    const originalKey = `${item.key || ''}`.trim()
+    const semanticKey = getParamSemanticKey(item)
+    const prepared = applySemanticMeta({
+      ...clone(item),
+      key: semanticKey,
+      sourceKeys: normalizeParamKeys([semanticKey, originalKey, ...(item.sourceKeys || [])])
+    }, semanticKey)
+
+    if (!map.has(semanticKey)) {
+      map.set(semanticKey, prepared)
+      continue
+    }
+
+    const current = map.get(semanticKey)
+    map.set(semanticKey, applySemanticMeta({
+      ...current,
+      type: current.type || prepared.type || 'number',
+      value: current.value ?? prepared.value ?? 0,
+      options: Array.isArray(current.options) && current.options.length ? current.options : prepared.options,
+      ownerKeys: mergeOwnerKeys(current.ownerKeys, prepared.ownerKeys),
+      sourceKeys: normalizeParamKeys([...(current.sourceKeys || []), ...(prepared.sourceKeys || [])]),
+      hidden: Boolean(current.hidden && prepared.hidden)
+    }, semanticKey))
+  }
+
+  return [...map.values()]
 }
 
 function hasPattern(value, patterns = []) {
@@ -134,7 +298,7 @@ function inferOwnerKeys(param = {}) {
   if (/аэратор|aerator/.test(identity)) found.push('aerators')
   if (/дорожк|walkway/.test(identity)) found.push('walkways')
   if (/карниз|cornice/.test(identity)) found.push('cornice')
-  if (/контруклон|counter.*slope/.test(identity)) found.push('counter_slopes')
+  if (/контруклон|уклонообраз|разуклон|counter.*slope|slope/.test(identity)) found.push('counter_slopes')
   if (/деформац|deformation/.test(identity)) found.push('deformation_joints')
   if (/фахверк|fachwerk/.test(identity)) found.push('fachwerks')
   if (/дымоудален|smoke.*hatch/.test(identity)) found.push('smoke_hatches')
@@ -397,13 +561,13 @@ function buildCommonEnhancements() {
         buildNumberParam('cable_gooseneck_count', 'Гусаки для ввода кабеля', 'шт', 'Количество примыканий к гусакам', 'engineering')
       ]),
       buildOption('small_penetrations', 'Проходки малого сечения', 170, [
-        buildNumberParam('pass_through_small_count', 'Проходки малого сечения', 'шт', 'До 150 мм: гусаки, трубы и выводы', 'engineering')
+        buildNumberParam('pass_through_small_count', 'Проходки малого сечения', 'шт', 'd=10-80 мм: гусаки, малые трубы и выводы', 'engineering')
       ]),
       buildOption('medium_penetrations', 'Проходки среднего сечения', 180, [
-        buildNumberParam('pass_through_medium_count', 'Проходки среднего сечения', 'шт', 'От 150 до 300 мм: дефлекторы, круглые трубы', 'engineering')
+        buildNumberParam('pass_through_medium_count', 'Проходки среднего сечения', 'шт', 'd=80-300 мм: дефлекторы, круглые трубы', 'engineering')
       ]),
       buildOption('other_penetrations', 'Прочие проходки', 185, [
-        buildNumberParam('pass_through_count', 'Прочие проходки', 'шт', 'Общее количество проходок через кровлю', 'engineering')
+        buildNumberParam('pass_through_count', 'Прочие проходки', 'шт', 'Нестандартные проходки: укажите количество отдельно', 'engineering')
       ]),
       buildOption('vent_shafts', 'Вентиляционные шахты', 190, [
         buildNumberParam('vent_shaft_perimeter', 'Примыкания к вентшахтам', 'м/п', 'Суммарная длина примыканий к вентиляционным шахтам', 'engineering')
@@ -456,10 +620,7 @@ function buildPvcConcreteEnhancements() {
 
 function buildBrmEnhancements() {
   return {
-    params: [
-      buildNumberParam('screed_area', 'Площадь стяжки', 'м2', 'Если площадь стяжки отличается от площади кровли', 'layers'),
-      buildNumberParam('primer_area', 'Площадь праймирования', 'м2', 'Для наплавляемых систем по плоскости и парапетам', 'layers')
-    ],
+    params: [],
     options: [
       buildOption('aerators', 'Аэраторы', 30, [
         buildNumberParam('aerators_count', 'Количество аэраторов', 'шт', 'Кровельные аэраторы', 'drainage')
@@ -505,7 +666,7 @@ export function getEnhancedTemplateMeta(system = {}) {
 
   return {
     context,
-    params: mergeParams(applyBaseParamVisibilityRules(baseParamsRaw), extraParams),
+    params: mergeEquivalentParams(mergeParams(applyBaseParamVisibilityRules(baseParamsRaw), extraParams)),
     options: mergeOptions(baseOptions, extraOptions)
   }
 }
@@ -537,19 +698,27 @@ export function getEffectiveTemplateParams(system = {}, selectedKeys = []) {
     }
   }
 
-  return mergeParams(visibleBaseParams, selectedOptionParams)
+  return mergeEquivalentParams(mergeParams(visibleBaseParams, selectedOptionParams))
 }
 
 export function sanitizeTemplateParamValues(system = {}, selectedKeys = [], values = {}) {
-  const visibleKeys = new Set(
-    getEffectiveTemplateParams(system, selectedKeys)
-      .map((param) => param?.key)
-      .filter(Boolean)
-  )
+  const effectiveParams = getEffectiveTemplateParams(system, selectedKeys)
+  const payload = {}
 
-  return Object.fromEntries(
-    Object.entries(values || {}).filter(([key]) => visibleKeys.has(key))
-  )
+  for (const param of effectiveParams) {
+    if (!param?.key) continue
+
+    const candidateKeys = normalizeParamKeys([param.key, ...(param.sourceKeys || [])])
+    const resolvedEntry = candidateKeys.find((key) => Object.prototype.hasOwnProperty.call(values || {}, key))
+    if (!resolvedEntry) continue
+
+    const resolvedValue = values[resolvedEntry]
+    for (const key of candidateKeys) {
+      payload[key] = resolvedValue
+    }
+  }
+
+  return payload
 }
 
 

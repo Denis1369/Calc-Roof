@@ -6319,81 +6319,516 @@ export const materialVariantsSeed = [
 
 export const coefficientsSeed = [
   {
-    "group_name": "paro_barrier",
-    "name": "parobarrier_overlap_k",
+    "code": "parobarrier_overlap_k",
+    "group_name": "Пароизоляция",
+    "name": "Запас пароизоляции",
     "value": 1.15,
-    "unit": "coef",
-    "description": "Запас на нахлесты пароизоляции"
+    "unit": "коэф.",
+    "description": "Пароизоляционная пленка: площадь кровли умножается на 1,15. Коэффициент учитывает боковые и торцевые нахлесты полотен."
   },
   {
-    "group_name": "pvc",
-    "name": "pvc_membrane_overlap_k",
-    "value": 1.1,
-    "unit": "coef",
-    "description": "Запас на нахлесты ПВХ мембраны 2.1 м"
+    "code": "parobarrier_tape_rolls_per_m2",
+    "group_name": "Пароизоляция",
+    "name": "Скотч пароизоляции",
+    "value": 0.013333,
+    "unit": "рул/м2",
+    "description": "Двусторонний скотч: площадь кровли делится на ширину рулона пароизоляции 3 м и длину рулона скотча 25 м."
   },
   {
-    "group_name": "pvc",
-    "name": "pvc_membrane_overlap_narrow_k",
+    "code": "parobarrier_s_h57_750_k",
+    "group_name": "Пароизоляция профлист",
+    "name": "Паробарьер С Н57-750",
+    "value": 1.19,
+    "unit": "коэф.",
+    "description": "Паробарьер С по профилированному листу Н57-750. Коэффициент учитывает геометрию профиля и минимальный боковой нахлест 50 мм."
+  },
+  {
+    "code": "parobarrier_s_h60_845_k",
+    "group_name": "Пароизоляция профлист",
+    "name": "Паробарьер С Н60-845",
     "value": 1.18,
-    "unit": "coef",
-    "description": "Запас для узких полос/доборных элементов"
+    "unit": "коэф.",
+    "description": "Паробарьер С по профилированному листу Н60-845. Коэффициент учитывает геометрию профиля и минимальный боковой нахлест 50 мм."
   },
   {
-    "group_name": "mineral_wool",
-    "name": "mineral_wool_cutting_k",
+    "code": "parobarrier_s_h75_750_k",
+    "group_name": "Пароизоляция профлист",
+    "name": "Паробарьер С Н75-750",
+    "value": 1.2,
+    "unit": "коэф.",
+    "description": "Паробарьер С по профилированному листу Н75-750. Коэффициент учитывает геометрию профиля и минимальный боковой нахлест 50 мм."
+  },
+  {
+    "code": "parobarrier_s_h114_600_k",
+    "group_name": "Пароизоляция профлист",
+    "name": "Паробарьер С Н114-600",
+    "value": 1.12,
+    "unit": "коэф.",
+    "description": "Паробарьер С по профилированному листу Н114-600. Коэффициент учитывает геометрию профиля и минимальный боковой нахлест 50 мм."
+  },
+  {
+    "code": "parobarrier_s_h114_750_k",
+    "group_name": "Пароизоляция профлист",
+    "name": "Паробарьер С Н114-750",
+    "value": 1.12,
+    "unit": "коэф.",
+    "description": "Паробарьер С по профилированному листу Н114-750. Коэффициент учитывает геометрию профиля и минимальный боковой нахлест 50 мм."
+  },
+  {
+    "code": "parobarrier_s_h153_840_k",
+    "group_name": "Пароизоляция профлист",
+    "name": "Паробарьер С Н153-840",
+    "value": 1.33,
+    "unit": "коэф.",
+    "description": "Паробарьер С по профилированному листу Н153-840. Коэффициент учитывает геометрию профиля и минимальный боковой нахлест 50 мм."
+  },
+  {
+    "code": "parobarrier_s_skn127_1100_k",
+    "group_name": "Пароизоляция профлист",
+    "name": "Паробарьер С СКН127-1100",
+    "value": 1.22,
+    "unit": "коэф.",
+    "description": "Паробарьер С по профилированному листу СКН127-1100. Коэффициент учитывает геометрию профиля и минимальный боковой нахлест 50 мм."
+  },
+  {
+    "code": "parobarrier_s_skn153_900_k",
+    "group_name": "Пароизоляция профлист",
+    "name": "Паробарьер С СКН153-900",
+    "value": 1.24,
+    "unit": "коэф.",
+    "description": "Паробарьер С по профилированному листу СКН153-900. Коэффициент учитывает геометрию профиля и минимальный боковой нахлест 50 мм."
+  },
+  {
+    "code": "parobarrier_s_skn157_800_k",
+    "group_name": "Пароизоляция профлист",
+    "name": "Паробарьер С СКН157-800",
+    "value": 1.2,
+    "unit": "коэф.",
+    "description": "Паробарьер С по профилированному листу СКН157-800. Коэффициент учитывает геометрию профиля и минимальный боковой нахлест 50 мм."
+  },
+  {
+    "code": "brm_overlap_k",
+    "group_name": "Битумная гидроизоляция",
+    "name": "БРМ нахлест 85/150",
+    "value": 1.15,
+    "unit": "коэф.",
+    "description": "Битумные рулонные материалы: боковой нахлест 85 мм и торцевой нахлест 150 мм."
+  },
+  {
+    "code": "brm_overlap_100_150_k",
+    "group_name": "Битумная гидроизоляция",
+    "name": "БРМ нахлест 100/150",
+    "value": 1.17,
+    "unit": "коэф.",
+    "description": "Битумные рулонные материалы: боковой нахлест 100 мм и торцевой нахлест 150 мм."
+  },
+  {
+    "code": "brm_single_layer_overlap_k",
+    "group_name": "Битумная гидроизоляция",
+    "name": "БРМ один слой",
+    "value": 1.2,
+    "unit": "коэф.",
+    "description": "Однослойная битумная гидроизоляция: боковой нахлест 120 мм и торцевой нахлест 150 мм."
+  },
+  {
+    "code": "mineral_wool_cutting_k",
+    "group_name": "Теплоизоляция",
+    "name": "Запас минваты",
     "value": 1.03,
-    "unit": "coef",
-    "description": "Запас на подрезку и стыки минеральной ваты"
+    "unit": "коэф.",
+    "description": "Минераловатная теплоизоляция: запас 3% на подрезку, стыки и технологические отходы."
   },
   {
-    "group_name": "xps",
-    "name": "xps_cutting_k",
+    "code": "xps_cutting_k",
+    "group_name": "Теплоизоляция",
+    "name": "Запас XPS",
     "value": 1.03,
-    "unit": "coef",
-    "description": "Запас на подрезку XPS"
+    "unit": "коэф.",
+    "description": "Экструзионный пенополистирол XPS: запас 3% на подрезку, стыки и технологические отходы."
   },
   {
-    "group_name": "pir",
-    "name": "pir_cutting_k",
+    "code": "pir_cutting_k",
+    "group_name": "Теплоизоляция",
+    "name": "Запас PIR",
     "value": 1.02,
-    "unit": "coef",
-    "description": "Запас на подрезку PIR"
+    "unit": "коэф.",
+    "description": "PIR-плиты: рабочий запас 2% на подрезку и технологические отходы."
   },
   {
-    "group_name": "fasteners",
-    "name": "insulation_fasteners_per_m2",
-    "value": 5,
-    "unit": "pcs/m2",
-    "description": "Средний расход крепежа теплоизоляции"
+    "code": "insulation_fasteners_base_per_m2",
+    "group_name": "Крепеж",
+    "name": "Крепеж утеплителя база",
+    "value": 2.8,
+    "unit": "шт/м2",
+    "description": "Базовая норма крепежа теплоизоляции по плоскости кровли до учета запаса."
   },
   {
-    "group_name": "fasteners",
-    "name": "membrane_fasteners_per_m2",
-    "value": 5,
-    "unit": "pcs/m2",
-    "description": "Средний расход крепежа мембраны"
+    "code": "insulation_fasteners_stock_k",
+    "group_name": "Крепеж",
+    "name": "Запас крепежа утеплителя",
+    "value": 1.05,
+    "unit": "коэф.",
+    "description": "Запас 5% к базовому количеству крепежа теплоизоляции."
   },
   {
-    "group_name": "primer",
-    "name": "primer_n01_kg_per_m2",
+    "code": "insulation_fasteners_per_m2",
+    "group_name": "Крепеж",
+    "name": "Крепеж утеплителя",
+    "value": 2.94,
+    "unit": "шт/м2",
+    "description": "Итоговая укрупненная норма крепежа теплоизоляции: 2,8 шт/м2 с запасом 5%."
+  },
+  {
+    "code": "pir_fasteners_large_plate_per_m2",
+    "group_name": "Крепеж",
+    "name": "Крепеж PIR 1,2x2,4",
+    "value": 2.8,
+    "unit": "шт/м2",
+    "description": "Крепеж LOGICPIR при размере плиты 1,2x2,4 м: средняя норма 2,8 шт/м2 до учета запаса."
+  },
+  {
+    "code": "pir_fasteners_small_plate_per_m2",
+    "group_name": "Крепеж",
+    "name": "Крепеж PIR 0,6x1,2",
+    "value": 5.6,
+    "unit": "шт/м2",
+    "description": "Крепеж LOGICPIR при размере плиты 0,6x1,2 м: средняя норма 5,6 шт/м2 до учета запаса."
+  },
+  {
+    "code": "membrane_fasteners_per_m2",
+    "group_name": "Крепеж",
+    "name": "Крепеж мембраны",
+    "value": 4,
+    "unit": "шт/м2",
+    "description": "Средняя норма механического крепления ПВХ-мембраны по плоскости кровли. Для точного расчета нужен ветровой расчет."
+  },
+  {
+    "code": "bnk_bitumen_kg_per_m2",
+    "group_name": "Приклейка утеплителя",
+    "name": "Битум БНК 90/40",
+    "value": 2,
+    "unit": "кг/м2",
+    "description": "Битум БНК 90/40 для приклейки одного слоя теплоизоляции: средний расход 2 кг на 1 м2."
+  },
+  {
+    "code": "logicpir_foam_can_per_m2",
+    "group_name": "Приклейка утеплителя",
+    "name": "Пена LOGICPIR",
+    "value": 0.25,
+    "unit": "шт/м2",
+    "description": "Клей-пена LOGICPIR 1000 мл: средний расход на приклейку 1 м2 одного слоя теплоизоляции."
+  },
+  {
+    "code": "logicroof_spray_foam_can_per_m2",
+    "group_name": "Приклейка утеплителя",
+    "name": "Пена LOGICROOF Spray",
+    "value": 0.0071,
+    "unit": "шт/м2",
+    "description": "Пена-клей LOGICROOF Spray 10 л: средний расход на приклейку 1 м2 одного слоя теплоизоляции."
+  },
+  {
+    "code": "xps_adhesive_foam_per_m2",
+    "group_name": "Приклейка утеплителя",
+    "name": "Клей-пена XPS",
+    "value": 0.0071,
+    "unit": "шт/м2",
+    "description": "Укрупненная норма клей-пены для XPS по расчетной строке приложения; используется как расход на 1 м2 приклейки."
+  },
+  {
+    "code": "wedge_plate_stock_k",
+    "group_name": "Уклоны",
+    "name": "Запас клиновидных плит",
+    "value": 1.05,
+    "unit": "коэф.",
+    "description": "Клиновидная теплоизоляция: запас 5% на подрезку и технологические отходы."
+  },
+  {
+    "code": "wedge_additional_plate_stock_k",
+    "group_name": "Уклоны",
+    "name": "Запас доборных плит",
+    "value": 1.1,
+    "unit": "коэф.",
+    "description": "Доборные плиты для формирования уклонов: запас 10% на подрезку и технологические отходы."
+  },
+  {
+    "code": "primer_n01_kg_per_m2",
+    "group_name": "Праймеры",
+    "name": "Праймер №01",
     "value": 0.3,
-    "unit": "kg/m2",
-    "description": "Средний расход праймера №01"
+    "unit": "кг/м2",
+    "description": "Праймер битумный №01 по цементно-песчаной стяжке, бетону и аналогичным основаниям: средний расход 0,3 кг/м2."
   },
   {
-    "group_name": "separator",
-    "name": "glass_fleece_k",
+    "code": "primer_bucket_per_m2",
+    "group_name": "Праймеры",
+    "name": "Расход праймера",
+    "value": 0.3,
+    "unit": "кг/м2",
+    "description": "Дублирующий код для формул приложения: расход праймера №01 0,3 кг/м2."
+  },
+  {
+    "code": "primer_acl_csp_kg_per_m2_side",
+    "group_name": "Праймеры",
+    "name": "Праймер АЦЛ/ЦСП",
+    "value": 0.25,
+    "unit": "кг/м2",
+    "description": "Праймирование листов АЦЛ/ЦСП с одной стороны. В расчете листы обрабатываются с двух сторон."
+  },
+  {
+    "code": "pvc_membrane_preliminary_k",
+    "group_name": "ПВХ-мембрана",
+    "name": "ПВХ предварительно",
+    "value": 1.15,
+    "unit": "коэф.",
+    "description": "Предварительный укрупненный коэффициент ПВХ-мембраны, если ширина рулона еще не уточнена."
+  },
+  {
+    "code": "pvc_membrane_overlap_k",
+    "group_name": "ПВХ-мембрана",
+    "name": "ПВХ рулон 2,1 м",
+    "value": 1.11,
+    "unit": "коэф.",
+    "description": "ПВХ-мембрана шириной 2,1 м: коэффициент учитывает продольные и поперечные нахлесты."
+  },
+  {
+    "code": "pvc_membrane_overlap_narrow_k",
+    "group_name": "ПВХ-мембрана",
+    "name": "ПВХ рулон 1,05 м",
     "value": 1.18,
-    "unit": "coef",
-    "description": "Запас стеклохолста на нахлесты"
+    "unit": "коэф.",
+    "description": "ПВХ-мембрана шириной 1,05 м: коэффициент учитывает продольные и поперечные нахлесты."
   },
   {
-    "group_name": "walkways",
-    "name": "walkway_puzzle_length_m",
+    "code": "pvc_membrane_width_07_k",
+    "group_name": "ПВХ-мембрана",
+    "name": "ПВХ рулон 0,7 м",
+    "value": 1.26,
+    "unit": "коэф.",
+    "description": "ПВХ-мембрана шириной 0,7 м: коэффициент учитывает продольные и поперечные нахлесты."
+  },
+  {
+    "code": "pvc_membrane_width_05_k",
+    "group_name": "ПВХ-мембрана",
+    "name": "ПВХ рулон 0,5 м",
+    "value": 1.35,
+    "unit": "коэф.",
+    "description": "ПВХ-мембрана шириной 0,5 м: коэффициент учитывает продольные и поперечные нахлесты."
+  },
+  {
+    "code": "pvc_aerator_area_m2",
+    "group_name": "ПВХ-мембрана",
+    "name": "Аэратор ПВХ",
+    "value": 235,
+    "unit": "м2/шт",
+    "description": "Кровельный ПВХ-аэратор 75x240: ориентировочно один аэратор на 235 м2 кровли."
+  },
+  {
+    "code": "logicroof_ng_stock_k",
+    "group_name": "ПВХ-мембрана",
+    "name": "Запас LOGICROOF NG",
+    "value": 1.03,
+    "unit": "коэф.",
+    "description": "Защитный негорючий материал LOGICROOF NG: запас 3% на подрезку и технологические отходы."
+  },
+  {
+    "code": "pvc_cleaner_pack_per_m2",
+    "group_name": "ПВХ-мембрана",
+    "name": "Очиститель ПВХ",
+    "value": 0.0005,
+    "unit": "шт/м2",
+    "description": "Очиститель ПВХ-мембран 3 л: расход по площади ПВХ-мембраны."
+  },
+  {
+    "code": "liquid_pvc_pack_per_m2",
+    "group_name": "ПВХ-мембрана",
+    "name": "Жидкий ПВХ",
+    "value": 0.004,
+    "unit": "шт/м2",
+    "description": "Жидкий ПВХ: расход по площади ПВХ-мембраны."
+  },
+  {
+    "code": "logicroof_spray_contact_can_per_m2",
+    "group_name": "ПВХ-мембрана",
+    "name": "Клей Spray",
+    "value": 0.0088,
+    "unit": "шт/м2",
+    "description": "Контактный клей LOGICROOF Spray 17 л: средний расход по площади приклейки."
+  },
+  {
+    "code": "glass_fleece_k",
+    "group_name": "Разделительный слой",
+    "name": "Стеклохолст",
+    "value": 1.18,
+    "unit": "коэф.",
+    "description": "Стеклохолст как разделительный слой: коэффициент учитывает нахлесты полотен."
+  },
+  {
+    "code": "walkway_puzzle_length_m",
+    "group_name": "Пешеходные дорожки",
+    "name": "Длина Puzzle",
     "value": 0.6,
-    "unit": "m",
-    "description": "Длина одной дорожки Walkway Puzzle"
+    "unit": "м",
+    "description": "Длина одного элемента Walkway Puzzle для пересчета общей длины дорожек в количество элементов."
+  },
+  {
+    "code": "walkway_puzzle_stock_k",
+    "group_name": "Пешеходные дорожки",
+    "name": "Запас Puzzle",
+    "value": 1.03,
+    "unit": "коэф.",
+    "description": "Walkway Puzzle: запас 3% на подрезку и технологические отходы."
+  },
+  {
+    "code": "bitumen_aerator_fused_area_m2",
+    "group_name": "Аэраторы",
+    "name": "Аэратор БРМ наплавление",
+    "value": 82,
+    "unit": "м2/шт",
+    "description": "Аэратор для битумной кровли при наплавляемой системе: ориентировочно один аэратор на 82 м2."
+  },
+  {
+    "code": "bitumen_aerator_mechanical_area_m2",
+    "group_name": "Аэраторы",
+    "name": "Аэратор БРМ мехкрепление",
+    "value": 122,
+    "unit": "м2/шт",
+    "description": "Аэратор для битумной кровли при механически закрепленной системе: ориентировочно один аэратор на 122 м2."
+  },
+  {
+    "code": "pvc_parapet_main_membrane_m2_per_m",
+    "group_name": "Примыкания ПВХ",
+    "name": "Мембрана на парапет",
+    "value": 1.42,
+    "unit": "м2/м",
+    "description": "Укрупненная норма основной ПВХ-мембраны на примыкания к парапету: высота/заведение около 1,2 м с учетом нахлестов."
+  },
+  {
+    "code": "pvc_parapet_aux_membrane_m2_per_m",
+    "group_name": "Примыкания ПВХ",
+    "name": "Доборная мембрана парапета",
+    "value": 0.47,
+    "unit": "м2/м",
+    "description": "Укрупненная норма доборной/усиливающей ПВХ-мембраны для примыканий и углов парапета."
+  },
+  {
+    "code": "pvc_parapet_fasteners_per_m",
+    "group_name": "Примыкания ПВХ",
+    "name": "Крепеж планок",
+    "value": 10,
+    "unit": "шт/м",
+    "description": "Крепеж прижимной и краевой планки: ориентировочно 5 шт/м на каждую из двух планок."
+  },
+  {
+    "code": "pvc_parapet_sealant_tube_per_m",
+    "group_name": "Примыкания ПВХ",
+    "name": "Герметик планок",
+    "value": 0.25,
+    "unit": "шт/м",
+    "description": "Полиуретановый герметик для примыканий: ориентировочно один картридж на 4 погонных метра."
+  },
+  {
+    "code": "logicroof_bond_5l_pir_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond 5 л",
+    "name": "Bond 5 л PIR",
+    "value": 0.056,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond 5 л по LOGICPIR PROF СХМ/СХМ."
+  },
+  {
+    "code": "logicroof_bond_5l_wood_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond 5 л",
+    "name": "Bond 5 л дерево",
+    "value": 0.06,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond 5 л по деревянному основанию."
+  },
+  {
+    "code": "logicroof_bond_5l_concrete_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond 5 л",
+    "name": "Bond 5 л бетон",
+    "value": 0.09,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond 5 л по бетонному основанию без праймера."
+  },
+  {
+    "code": "logicroof_bond_5l_primed_concrete_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond 5 л",
+    "name": "Bond 5 л бетон с праймером",
+    "value": 0.064,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond 5 л по бетонному основанию, обработанному праймером."
+  },
+  {
+    "code": "logicroof_bond_5l_bitumen_granules_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond 5 л",
+    "name": "Bond 5 л БРМ гранулы",
+    "value": 0.1,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond 5 л по битумному материалу с крупнозернистой посыпкой."
+  },
+  {
+    "code": "logicroof_bond_5l_bitumen_plain_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond 5 л",
+    "name": "Bond 5 л БРМ без гранул",
+    "value": 0.07,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond 5 л по битумному материалу без крупнозернистой посыпки."
+  },
+  {
+    "code": "logicroof_bond_arctic_10l_pir_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond Arctic 10 л",
+    "name": "Bond Arctic PIR",
+    "value": 0.028,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond Arctic 10 л по LOGICPIR PROF СХМ/СХМ."
+  },
+  {
+    "code": "logicroof_bond_arctic_10l_wood_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond Arctic 10 л",
+    "name": "Bond Arctic дерево",
+    "value": 0.03,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond Arctic 10 л по деревянному основанию."
+  },
+  {
+    "code": "logicroof_bond_arctic_10l_concrete_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond Arctic 10 л",
+    "name": "Bond Arctic бетон",
+    "value": 0.045,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond Arctic 10 л по бетонному основанию без праймера."
+  },
+  {
+    "code": "logicroof_bond_arctic_10l_primed_concrete_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond Arctic 10 л",
+    "name": "Bond Arctic бетон с праймером",
+    "value": 0.032,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond Arctic 10 л по бетонному основанию, обработанному праймером."
+  },
+  {
+    "code": "logicroof_bond_arctic_10l_bitumen_granules_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond Arctic 10 л",
+    "name": "Bond Arctic БРМ гранулы",
+    "value": 0.05,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond Arctic 10 л по битумному материалу с крупнозернистой посыпкой."
+  },
+  {
+    "code": "logicroof_bond_arctic_10l_bitumen_plain_can_per_m2",
+    "group_name": "Клей LOGICROOF Bond Arctic 10 л",
+    "name": "Bond Arctic БРМ без гранул",
+    "value": 0.035,
+    "unit": "шт/м2",
+    "description": "Клей LOGICROOF Bond Arctic 10 л по битумному материалу без крупнозернистой посыпки."
+  },
+  {
+    "code": "burner_gas_l_per_m2",
+    "group_name": "Расходники",
+    "name": "Газ для горелки",
+    "value": 0.47,
+    "unit": "л/м2",
+    "description": "Газ пропан для наплавляемых материалов по сметам: 0,47 л на 1 м2 одного наплавляемого слоя."
   }
 ]
 
@@ -6437,55 +6872,55 @@ export const formulasSeed = [
   {
     "code": "PAROBARRIER_AREA",
     "name": "Пароизоляция с запасом",
-    "expression": "S * [parobarrier_overlap_k]",
+    "expression": "S * [Запас пароизоляции]",
     "description": "Площадь пароизоляции с запасом"
   },
   {
     "code": "PVC_AREA",
     "name": "ПВХ мембрана с запасом",
-    "expression": "S * [pvc_membrane_overlap_k]",
+    "expression": "S * [ПВХ рулон 2,1 м]",
     "description": "Площадь ПВХ мембраны с запасом"
   },
   {
     "code": "GLASS_FLEECE_AREA",
     "name": "Стеклохолст с запасом",
-    "expression": "S * [glass_fleece_k]",
+    "expression": "S * [Стеклохолст]",
     "description": "Площадь стеклохолста с запасом"
   },
   {
     "code": "MINERAL_WOOL_VOLUME",
     "name": "Минвата по толщине",
-    "expression": "S * T / 1000 * [mineral_wool_cutting_k]",
+    "expression": "S * T / 1000 * [Запас минваты]",
     "description": "Объем минваты по толщине"
   },
   {
     "code": "XPS_VOLUME",
     "name": "XPS по толщине",
-    "expression": "S * T / 1000 * [xps_cutting_k]",
+    "expression": "S * T / 1000 * [Запас XPS]",
     "description": "Объем XPS по толщине"
   },
   {
     "code": "PIR_AREA_THICKNESS",
     "name": "PIR по толщине",
-    "expression": "S * [pir_cutting_k]",
+    "expression": "S * [Запас PIR]",
     "description": "Площадь PIR плит с запасом"
   },
   {
     "code": "PRIMER",
     "name": "Праймер",
-    "expression": "S * [primer_n01_kg_per_m2]",
+    "expression": "S * [Праймер №01]",
     "description": "Расход праймера"
   },
   {
     "code": "INSULATION_FASTENERS",
     "name": "Крепеж теплоизоляции",
-    "expression": "S * [insulation_fasteners_per_m2]",
+    "expression": "S * [Крепеж утеплителя]",
     "description": "Расход крепежа теплоизоляции"
   },
   {
     "code": "MEMBRANE_FASTENERS",
     "name": "Крепеж мембраны",
-    "expression": "S * [membrane_fasteners_per_m2]",
+    "expression": "S * [Крепеж мембраны]",
     "description": "Расход крепежа мембраны"
   }
 ]
@@ -8822,6 +9257,174 @@ function findSystemSeed(code) {
   return systemsSeed.find((item) => item.code === code)
 }
 
+function normalizeSeedText(value) {
+  return `${value || ''}`.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function findSeedLayer(system, code) {
+  return (system.layers || []).find((layer) => layer[0] === code)
+}
+
+function upsertLayerMaterial(layer, baseName, role = 'default', expression = '', stableCode = '', notes = '') {
+  if (!layer) return
+  if (!Array.isArray(layer[5])) layer[5] = []
+
+  const target = normalizeSeedText(baseName)
+  const existing = layer[5].find((item) => Array.isArray(item) && normalizeSeedText(item[0]) === target)
+  const payload = [baseName, role || 'default', expression || '', stableCode || '', notes || '']
+
+  if (existing) {
+    existing[1] = role || existing[1] || 'default'
+    existing[2] = expression || existing[2] || ''
+    existing[3] = stableCode || existing[3] || ''
+    existing[4] = notes || existing[4] || ''
+    return
+  }
+
+  layer[5].push(payload)
+}
+
+function upsertLayerMaterialByPattern(layer, predicate, baseName, role = 'default', expression = '', stableCode = '', notes = '') {
+  if (!layer) return
+  if (!Array.isArray(layer[5])) layer[5] = []
+
+  const existing = layer[5].find((item) => Array.isArray(item) && predicate(normalizeSeedText(item[0] || '')))
+  if (!existing) {
+    upsertLayerMaterial(layer, baseName, role, expression, stableCode, notes)
+    return
+  }
+
+  existing[1] = role || existing[1] || 'default'
+  existing[2] = expression || existing[2] || ''
+  existing[3] = stableCode || existing[3] || ''
+  existing[4] = notes || existing[4] || ''
+}
+
+function upsertLayerWork(layer, workName, formulaCode = 'AREA', expression = '', stableCode = '', notes = '') {
+  if (!layer) return
+  if (!Array.isArray(layer[6])) layer[6] = []
+
+  const target = normalizeSeedText(workName)
+  const existing = layer[6].find((item) => Array.isArray(item) && normalizeSeedText(item[0]) === target)
+  const payload = [workName, formulaCode || 'AREA', expression || '', stableCode || '', notes || '']
+
+  if (existing) {
+    existing[1] = formulaCode || existing[1] || 'AREA'
+    existing[2] = expression || existing[2] || ''
+    existing[3] = stableCode || existing[3] || ''
+    existing[4] = notes || existing[4] || ''
+    return
+  }
+
+  layer[6].push(payload)
+}
+
+function upsertLayerWorkByPattern(layer, predicate, workName, formulaCode = 'AREA', expression = '', stableCode = '', notes = '') {
+  if (!layer) return
+  if (!Array.isArray(layer[6])) layer[6] = []
+
+  const existing = layer[6].find((item) => Array.isArray(item) && predicate(normalizeSeedText(item[0] || '')))
+  if (!existing) {
+    upsertLayerWork(layer, workName, formulaCode, expression, stableCode, notes)
+    return
+  }
+
+  existing[0] = workName || existing[0]
+  existing[1] = formulaCode || existing[1] || 'AREA'
+  existing[2] = expression || existing[2] || ''
+  existing[3] = stableCode || existing[3] || ''
+  existing[4] = notes || existing[4] || ''
+}
+
+function applyEstimateFormulaPatch() {
+  for (const system of systemsSeed) {
+    const roofBase = normalizeSeedText(system.roof_base)
+    const waterproofing = normalizeSeedText(system.waterproofing)
+    const isProflist = roofBase.includes('prof') || roofBase.includes('лист')
+    const isConcrete = roofBase.includes('concrete') || roofBase.includes('бет') || roofBase.includes('жб')
+    const isPvc = waterproofing.includes('pvc') || waterproofing.includes('пвх')
+    const isBrm = waterproofing.includes('brm') || waterproofing.includes('бит')
+
+    if (isProflist) {
+      const base = findSeedLayer(system, 'base')
+      upsertLayerMaterial(base, 'Профилированный лист', 'default', 'C22 * 1.1', 'C25', 'Запас профлиста по сметам: 1,1-1,25 в зависимости от раскладки')
+      upsertLayerMaterial(base, 'Саморез для профлиста HARPOON HE5-R 5,5х32 углеродистая сталь SAE 1022 (1,2 шт/м2)', 'base_fastener', 'C22 * 1.5', 'C26')
+      upsertLayerMaterial(base, 'Заклепка вытяжная комбинированная 4,8х20 мм', 'base_rivet', 'C22 * 3', 'C27')
+    }
+
+    const vapor = findSeedLayer(system, 'vapor_barrier')
+    if (isProflist && (isPvc || isBrm)) {
+      upsertLayerWorkByPattern(
+        vapor,
+        (name) => name.includes('пароизоляц'),
+        isBrm ? 'Монтаж пароизоляции (плоскость + заведение на парапет)' : 'Устройство пароизоляционного слоя из пароизоляционной пленки',
+        'AREA',
+        isBrm ? 'S + (P * 0.15)' : 'S',
+        'C47'
+      )
+      upsertLayerMaterialByPattern(
+        vapor,
+        (name) => name.includes('паробарьер') || name.includes('пароизоляц') || name.includes('пленка'),
+        'Пароизоляционная пленка ТехноНИКОЛЬ',
+        'default',
+        'C47 * [Запас пароизоляции]',
+        'C50'
+      )
+      if (isPvc) {
+        upsertLayerMaterial(vapor, 'Двусторонний скотч', 'tape', '((C47 / 3) + max(P, C130 + C131) + CS) / 25', 'C51')
+      }
+    }
+
+    if ((isBrm && isConcrete) || (isPvc && isConcrete)) {
+      upsertLayerWork(vapor, 'Нанесение праймера в 1 слой. Плоскость и парапет', 'AREA', 'S + (P * 0.2)', 'C26')
+      upsertLayerWorkByPattern(vapor, (name) => name.includes('пароизоляц'), 'Монтаж пароизоляции в 1 слой', 'AREA', 'S + (P * 0.2)', 'C27')
+      upsertLayerMaterial(vapor, 'Праймер ТехноНиколь 01, 20 л', 'primer_bucket', 'max(1, ceil(C26 / 70))', 'C30')
+      upsertLayerMaterial(vapor, 'Технобарьер', 'bottom_layer', 'C27 * [БРМ нахлест 85/150]', 'C31')
+      upsertLayerMaterial(vapor, 'Газ пропан', 'gas', 'C26 * [Газ для горелки]', 'C32')
+    }
+
+    const waterproofingLayer = findSeedLayer(system, 'waterproofing')
+    if (isPvc) {
+      upsertLayerWorkByPattern(waterproofingLayer, (name) => name.includes('пвх') || name.includes('мембран'), isProflist
+        ? 'Монтаж гидроизоляционного покрытия из ПВХ мембраны шириной 2 м (центральная зона), с продольным нахлестом не менее 120 мм и поперечным не менее 200 мм по профлисту'
+        : 'Монтаж гидроизоляционного покрытия из ПВХ мембраны шириной 2 м (центральная зона), с продольным нахлестом не менее 120 мм и поперечным не менее 200 мм по ж/б',
+      'AREA', 'max(0, S - WZA)', 'C92')
+      upsertLayerWork(waterproofingLayer, isProflist
+        ? 'Монтаж гидроизоляционного покрытия из ПВХ мембраны шириной 1 м, с продольным нахлестом не менее 120 мм и поперечным не менее 200 мм по профлисту с учетом ветровых зон по профлисту'
+        : 'Монтаж гидроизоляционного покрытия из ПВХ мембраны шириной 1 м, с продольным нахлестом не менее 120 мм и поперечным не менее 200 мм по ж/б с учетом ветровых зон',
+      'AREA', 'WZA', 'C93')
+      upsertLayerMaterial(waterproofingLayer, 'LOGICROOF V-RP', 'default', 'max(C92 + C93, S) * [ПВХ рулон 1,05 м]', 'C100')
+      upsertLayerMaterial(waterproofingLayer, 'Телескопический крепеж TERMOCLIP 1', 'fastener', 'max(C92 + C93, S) * 5', 'C101')
+      upsertLayerMaterial(waterproofingLayer, 'Саморез сверлоконечный TERMOCLIP Ø 4.8 мм', 'fastener', 'C101', 'C102')
+      upsertLayerMaterial(waterproofingLayer, 'Очиститель для ПВХ мембран Fachmann, 3л', 'cleaner', 'max(1, ceil(max(C100, S) / 500))', 'C103')
+
+      const parapets = findSeedLayer(system, 'parapets')
+      upsertLayerWork(parapets, 'Устройство примыкания гидроизоляционного покрытия из ПВХ- мембраны к парапету', 'PERIMETER', 'P', 'C130')
+      upsertLayerWork(parapets, 'Монтаж прижимной и краевой кровельной планки', 'PERIMETER', 'max(P, C130 + C131) * 2', 'C140')
+      upsertLayerMaterial(parapets, 'LOGICROOF V-RP', 'main_membrane', 'max(P, C130 + C131) * [Мембрана на парапет]', 'C134')
+      upsertLayerMaterial(parapets, 'LOGICROOF V-SR', 'aux_membrane', 'max(P, C130 + C131) * [Доборная мембрана парапета]', 'C135')
+      upsertLayerMaterial(parapets, 'Прижимная кровельная планка алюминиевая 30*2000мм', 'planck', 'max(P, C130 + C131)', 'C142')
+      upsertLayerMaterial(parapets, 'Краевая кровельная планка алюминиевая 30*2000мм', 'planck', 'C142', 'C143')
+      upsertLayerMaterial(parapets, 'Крепеж кровельный ТехноНИКОЛЬ (саморез 5,5*35)', 'planck_fastener', 'max(P, C130 + C131) * [Крепеж планок]', 'C144')
+      upsertLayerMaterial(parapets, 'ПУ герметик', 'sealant', 'max(P, C130 + C131) * [Герметик планок]', 'C145')
+    }
+
+    if (isBrm) {
+      upsertLayerWork(waterproofingLayer, 'Монтаж гидроизоляционного покрытия из полимеро-битумного наплавляемого материала в 2 слоя', 'AREA', 'PA > 0 ? PA : S', 'C70')
+      upsertLayerMaterial(waterproofingLayer, 'Техноэласт ПЛАМЯ СТОП', 'top_layer', 'C70 * [БРМ нахлест 100/150]', 'C73')
+      upsertLayerMaterialByPattern(
+        waterproofingLayer,
+        (name) => name.includes('эпп') || name.includes('вент') || name.includes('фикс'),
+        'Унифлекс ЭПП (1ый слой)',
+        'bottom_layer',
+        'C73',
+        'C74'
+      )
+      upsertLayerMaterial(waterproofingLayer, 'Газ пропан', 'gas', '(C70 * [Газ для горелки]) * 2', 'C75')
+    }
+  }
+}
+
 function applyKlassikControlPatch() {
   upsertFormula('COUNT', 'Количество', '1', 'Фиксированное количество')
 
@@ -9058,6 +9661,7 @@ function applyKlassikControlPatch() {
   ]
 }
 
+applyEstimateFormulaPatch()
 applyKlassikControlPatch()
 
 async function seedMaterials(db) {
@@ -9215,7 +9819,7 @@ async function seedMaterials(db) {
 
 async function seedCoefficients(db) {
   for (const coefficient of coefficientsSeed) {
-    const key = normalizeKey(coefficient.name)
+    const key = normalizeKey(coefficient.code || coefficient.name)
     const existing = await db.select('SELECT id FROM coefficients WHERE normalize_key = $1 LIMIT 1', [key])
 
     if (existing.length === 0) {

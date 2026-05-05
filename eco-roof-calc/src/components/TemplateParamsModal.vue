@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="modal-overlay" @click.self="$emit('close')">
+    <div v-if="isOpen" class="modal-overlay">
       <div class="modal-card page-card">
         <div class="modal-header">
           <div>
@@ -69,6 +69,14 @@
 
         <div class="modal-footer">
           <button class="ui-btn ui-btn-secondary" type="button" @click="$emit('back')">{{ backLabel }}</button>
+          <button
+            v-if="savePresetLabel"
+            class="ui-btn ui-btn-secondary"
+            type="button"
+            @click="savePreset"
+          >
+            {{ savePresetLabel }}
+          </button>
           <button class="ui-btn ui-btn-primary" type="button" @click="submit">{{ submitLabel }}</button>
         </div>
       </div>
@@ -91,11 +99,12 @@ const props = defineProps({
   selectedKeys: { type: Array, default: () => [] },
   initialValues: { type: Object, default: () => ({}) },
   title: { type: String, default: 'Параметры системы' },
-  submitLabel: { type: String, default: 'Создать смету' },
-  backLabel: { type: String, default: 'Назад' }
+  submitLabel: { type: String, default: 'Вперед' },
+  backLabel: { type: String, default: 'Назад на 1 шаг' },
+  savePresetLabel: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'back', 'submit'])
+const emit = defineEmits(['close', 'back', 'submit', 'save-preset'])
 
 const GROUP_TITLES = {
   basic: 'Основные параметры',
@@ -103,7 +112,7 @@ const GROUP_TITLES = {
   drainage: 'Водоотведение и аэраторы',
   details: 'Примыкания и узлы',
   engineering: 'Инженерные узлы и проходки',
-  safety: 'Ограждения и безопасность',
+  safety: 'Безопасность и пешеходные дорожки',
   additional: 'Дополнительные элементы'
 }
 
@@ -154,8 +163,7 @@ function syncState({ previousTextValues = {}, previousSelectModes = {}, previous
 
   for (const param of effectiveParams.value) {
     const options = normalizedOptions(param)
-    const hasExplicitFallback = Object.prototype.hasOwnProperty.call(fallbackValues, param.key)
-    const fallbackValue = hasExplicitFallback ? fallbackValues[param.key] : param.value
+    const fallbackValue = resolveFallbackValue(param, fallbackValues, param.value)
 
     if (isSelectParam(param)) {
       const previousMode = previousSelectModes[param.key]
@@ -196,6 +204,19 @@ function syncState({ previousTextValues = {}, previousSelectModes = {}, previous
   customValues.value = nextCustomValues
 }
 
+function resolveFallbackValue(param, fallbackValues = {}, defaultValue = '') {
+  const candidateKeys = [param?.key, ...(Array.isArray(param?.sourceKeys) ? param.sourceKeys : [])]
+    .filter(Boolean)
+
+  for (const key of candidateKeys) {
+    if (Object.prototype.hasOwnProperty.call(fallbackValues, key)) {
+      return fallbackValues[key]
+    }
+  }
+
+  return defaultValue
+}
+
 function isSelectParam(param) {
   return param?.type === 'select' || normalizedOptions(param).length > 0
 }
@@ -223,6 +244,14 @@ function normalizedOptions(param) {
 }
 
 function submit() {
+  emit('submit', buildPayload())
+}
+
+function savePreset() {
+  emit('save-preset', buildPayload())
+}
+
+function buildPayload() {
   const payload = { ...localValues.value }
 
   for (const param of effectiveParams.value) {
@@ -233,7 +262,7 @@ function submit() {
     }
   }
 
-  emit('submit', sanitizeTemplateParamValues(props.system || {}, normalizedSelectedKeys.value, payload))
+  return sanitizeTemplateParamValues(props.system || {}, normalizedSelectedKeys.value, payload)
 }
 </script>
 
@@ -263,6 +292,12 @@ function submit() {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 18px;
+  position: sticky;
+  top: -20px;
+  z-index: 2;
+  background: var(--bg-card);
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-title {
@@ -338,6 +373,13 @@ function submit() {
   display: flex;
   justify-content: space-between;
   gap: 10px;
+  position: sticky;
+  bottom: -20px;
+  z-index: 2;
+  background: var(--bg-card);
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
 }
 
 @media (max-width: 800px) {

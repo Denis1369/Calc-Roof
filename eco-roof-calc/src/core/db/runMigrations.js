@@ -2,8 +2,14 @@ import { getDb } from '@/core/db/client'
 import { migration001InitV2 } from '@/core/db/migrations/001_init_v2'
 import { migration004TemplateFormulaSupport } from '@/core/db/migrations/004_template_formula_support'
 import { migration005SystemDefaultOverrides } from '@/core/db/migrations/005_system_default_overrides'
+import { migration006MaterialVariantSortOrder } from '@/core/db/migrations/006_material_variant_sort_order'
 
-const migrations = [migration001InitV2, migration004TemplateFormulaSupport, migration005SystemDefaultOverrides]
+const migrations = [
+  migration001InitV2,
+  migration004TemplateFormulaSupport,
+  migration005SystemDefaultOverrides,
+  migration006MaterialVariantSortOrder
+]
 
 async function ensureMigrationsTable(db) {
   await db.execute(`

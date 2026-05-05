@@ -14,6 +14,9 @@ function normalizePresetRow(row) {
     ...row,
     selectedKeys: Array.isArray(row?.features?.selectedKeys)
       ? row.features.selectedKeys
+      : [],
+    optionOrder: Array.isArray(row?.features?.optionOrder)
+      ? row.features.optionOrder
       : []
   }
 }

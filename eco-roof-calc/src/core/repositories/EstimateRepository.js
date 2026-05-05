@@ -24,19 +24,18 @@ export class EstimateRepository {
       return this.loadEstimate(id)
     }
 
-    await db.execute(
+    const insertResult = await db.execute(
       `INSERT INTO saved_estimates (title, estimate_json)
        VALUES ($1, $2)`,
       [title, estimateJson]
     )
 
-    const rows = await db.select(
-      `SELECT id
-       FROM saved_estimates
-       ORDER BY id DESC
-       LIMIT 1`
-    )
+    const savedId = Number(insertResult?.lastInsertId ?? 0)
+    if (savedId > 0) {
+      return this.loadEstimate(savedId)
+    }
 
+    const rows = await db.select('SELECT last_insert_rowid() AS id')
     return this.loadEstimate(rows[0]?.id)
   }
 

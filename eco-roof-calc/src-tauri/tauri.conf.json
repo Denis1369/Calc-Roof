@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "eco-roof-calc",
+  "productName": "RoofCalc",
   "version": "0.1.0",
   "identifier": "com.denis.eco-roof-calc",
   "build": {
@@ -12,9 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "eco-roof-calc",
-        "width": 800,
-        "height": 600
+        "title": "RoofCalc",
+        "width": 1440,
+        "height": 900,
+        "theme": "Light"
       }
     ],
     "security": {

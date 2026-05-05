@@ -46,6 +46,7 @@ export async function initDatabase() {
       height_mm REAL,
       density REAL,
       profile_name TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
       price REAL NOT NULL DEFAULT 0,
       source_url TEXT NOT NULL DEFAULT '',
       extra_json TEXT NOT NULL DEFAULT '{}',
@@ -288,6 +289,6 @@ export async function getMaterialWithVariantsByBaseName(baseName) {
   const rows = await db.select('SELECT * FROM materials WHERE normalize_key = $1 LIMIT 1', [normalizeKey(baseName)])
   if (!rows.length) return null
   const material = rows[0]
-  const variants = await db.select('SELECT * FROM material_variants WHERE material_id = $1 AND is_active = 1 ORDER BY is_default DESC, thickness_mm, variant_label', [material.id])
+  const variants = await db.select('SELECT * FROM material_variants WHERE material_id = $1 AND is_active = 1 ORDER BY is_default DESC, sort_order, thickness_mm, variant_label, id', [material.id])
   return { material, variants }
 }

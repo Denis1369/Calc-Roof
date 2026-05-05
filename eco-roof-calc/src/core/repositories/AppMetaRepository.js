@@ -14,6 +14,7 @@ export class AppMetaRepository {
 
   async set(key, value) {
     try {
+      const db = await getDb()
       // Сохраняем или обновляем значение (SQLite UPSERT)
       await db.execute(
         `INSERT INTO app_meta (key, value, updated_at) 
